@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: budget-postgres
+    environment:
+      POSTGRES_USER: budget
+      POSTGRES_PASSWORD: budget_secret
+      POSTGRES_DB: budget
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budget"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: budget-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://budget:budget_secret@postgres:5432/budget
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      PYTHON_SERVICE_URL: http://python:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+
+  python:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: budget-python
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./python-service:/app
+      - ./uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: budget-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+
+

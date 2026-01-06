@@ -1,0 +1,137 @@
+# Hetzner Cloud Production Deployment
+# 
+# Requirements: CX22 server (€3.79/month), 2 vCPU, 4GB RAM
+# 
+# Quick start:
+#   1. Edit Caddyfile with your domain
+#   2. Copy .env.example to .env and fill in values
+#   3. docker compose -f docker-compose.hetzner.yml up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: budget-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    networks:
+      - budget-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: budget-frontend
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - budget-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: budget-backend
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - PYTHON_SERVICE_URL=http://python:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      python:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - budget-network
+
+  python:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile.prod
+    container_name: budget-python
+    expose:
+      - "8001"
+    restart: unless-stopped
+    networks:
+      - budget-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: budget-postgres
+    environment:
+      - POSTGRES_USER=budget
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=budget
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budget -d budget"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - budget-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Daily database backups (kept for 7 days)
+  backup:
+    image: postgres:16-alpine
+    container_name: budget-backup
+    environment:
+      - PGHOST=postgres
+      - PGUSER=budget
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGDATABASE=budget
+    volumes:
+      - ./backups:/backups
+    entrypoint: /bin/sh
+    command: |
+      -c 'echo "Backup service started. First backup in 1 hour..."
+      sleep 3600
+      while true; do
+        FILENAME=/backups/budget_$(date +%Y%m%d_%H%M%S).sql.gz
+        echo "[$(date)] Creating backup: $FILENAME"
+        pg_dump | gzip > $FILENAME
+        echo "[$(date)] Cleaning backups older than 7 days..."
+        find /backups -name "*.sql.gz" -mtime +7 -delete
+        echo "[$(date)] Backup complete. Next backup in 24h."
+        sleep 86400
+      done'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - budget-network
+
+networks:
+  budget-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

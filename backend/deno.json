@@ -1,0 +1,27 @@
+{
+  "tasks": {
+    "dev": "deno run --watch --allow-net --allow-env --allow-read --allow-write src/main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write src/main.ts",
+    "test": "deno test --allow-env --allow-read src/tests/",
+    "db:generate": "deno run -A npm:drizzle-kit generate",
+    "db:migrate": "deno run -A npm:drizzle-kit migrate",
+    "db:push": "deno run -A npm:drizzle-kit push",
+    "db:studio": "deno run -A npm:drizzle-kit studio"
+  },
+  "imports": {
+    "hono": "npm:hono@^4.0.0",
+    "drizzle-orm": "npm:drizzle-orm@^0.29.0",
+    "drizzle-kit": "npm:drizzle-kit@^0.20.0",
+    "postgres": "npm:postgres@^3.4.0",
+    "bcrypt": "https://deno.land/x/bcrypt@v0.4.1/mod.ts",
+    "djwt": "https://deno.land/x/djwt@v3.0.1/mod.ts",
+    "zod": "npm:zod@^3.22.0",
+    "yahoo-finance2": "npm:yahoo-finance2@^2.9.0",
+    "@std/": "https://deno.land/std@0.210.0/"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window"]
+  }
+}
+
+
