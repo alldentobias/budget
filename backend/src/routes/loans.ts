@@ -7,10 +7,12 @@ import { authMiddleware } from "../middleware/auth.ts";
 const loansRoutes = new Hono();
 loansRoutes.use("*", authMiddleware);
 
+// principal and currentBalance are in minor units (øre/cents) - integers
+// interestRate and ownershipPct stay as decimals (percentages)
 const loanSchema = z.object({
   name: z.string().min(1).max(255),
-  principal: z.number().positive(),
-  currentBalance: z.number().min(0),
+  principal: z.number().int().positive(), // Integer in minor units
+  currentBalance: z.number().int().min(0), // Integer in minor units
   interestRate: z.number().min(0).max(100),
   ownershipPct: z.number().min(0).max(100).default(100),
   notes: z.string().optional().nullable(),
@@ -25,12 +27,12 @@ loansRoutes.get("/", async (c) => {
     orderBy: (loans, { desc }) => [desc(loans.createdAt)],
   });
 
+  // interestRate and ownershipPct are still decimals stored as strings
   return c.json(userLoans.map((loan) => ({
     ...loan,
-    principal: parseFloat(loan.principal),
-    currentBalance: parseFloat(loan.currentBalance),
     interestRate: parseFloat(loan.interestRate),
     ownershipPct: parseFloat(loan.ownershipPct),
+    // principal and currentBalance are bigint, come back as numbers
   })));
 });
 
@@ -46,8 +48,8 @@ loansRoutes.post("/", async (c) => {
       .values({
         userId: user.id,
         name: data.name,
-        principal: data.principal.toString(),
-        currentBalance: data.currentBalance.toString(),
+        principal: data.principal,
+        currentBalance: data.currentBalance,
         interestRate: data.interestRate.toString(),
         ownershipPct: data.ownershipPct.toString(),
         notes: data.notes || null,
@@ -56,8 +58,6 @@ loansRoutes.post("/", async (c) => {
 
     return c.json({
       ...newLoan,
-      principal: parseFloat(newLoan.principal),
-      currentBalance: parseFloat(newLoan.currentBalance),
       interestRate: parseFloat(newLoan.interestRate),
       ownershipPct: parseFloat(newLoan.ownershipPct),
     }, 201);
@@ -82,8 +82,8 @@ loansRoutes.put("/:id", async (c) => {
       .update(loans)
       .set({
         name: data.name,
-        principal: data.principal?.toString(),
-        currentBalance: data.currentBalance?.toString(),
+        principal: data.principal,
+        currentBalance: data.currentBalance,
         interestRate: data.interestRate?.toString(),
         ownershipPct: data.ownershipPct?.toString(),
         notes: data.notes,
@@ -97,8 +97,6 @@ loansRoutes.put("/:id", async (c) => {
 
     return c.json({
       ...updated,
-      principal: parseFloat(updated.principal),
-      currentBalance: parseFloat(updated.currentBalance),
       interestRate: parseFloat(updated.interestRate),
       ownershipPct: parseFloat(updated.ownershipPct),
     });
@@ -129,5 +127,3 @@ loansRoutes.delete("/:id", async (c) => {
 });
 
 export { loansRoutes };
-
-

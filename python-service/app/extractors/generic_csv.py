@@ -5,6 +5,11 @@ from app.schemas import ExtractedTransaction
 from app.extractors import register_extractor
 
 
+def to_minor_units(amount: float) -> int:
+    """Convert amount from major units to minor units (øre/cents), rounding to integer"""
+    return round(abs(amount) * 100)
+
+
 @register_extractor(
     name="generic_csv",
     description="Generic CSV extractor - expects columns: date, description/title, amount",
@@ -14,6 +19,7 @@ def extract_generic_csv(file_content: bytes, filename: str) -> List[ExtractedTra
     """
     Generic CSV extractor that tries to intelligently parse common formats.
     Expects at minimum: a date column, a description/title column, and an amount column.
+    Returns amounts in minor units (øre/cents).
     """
     # Try different encodings
     for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
@@ -108,7 +114,7 @@ def extract_generic_csv(file_content: bytes, filename: str) -> List[ExtractedTra
             transactions.append(ExtractedTransaction(
                 date=date_val.strftime('%Y-%m-%d'),
                 title=title,
-                amount=amount,
+                amount=to_minor_units(amount),  # Convert to minor units
                 description=None,
                 raw_data=row.to_json()
             ))
@@ -117,5 +123,3 @@ def extract_generic_csv(file_content: bytes, filename: str) -> List[ExtractedTra
             continue
     
     return transactions
-
-

@@ -393,8 +393,8 @@ export interface ExpenseStats {
   total: number
   byCategory: Array<{ categoryId: string; name: string; color: string; amount: number; count: number }>
   count: number
-  collectToMe: number
-  collectFromMe: number
+  totalCollectToMe: number      // Total amount others owe you (unsettled)
+  totalCollectFromMe: number    // Total amount you owe others (unsettled)
   settledToMe: number
   settledFromMe: number
   netSettlement: number
@@ -445,14 +445,15 @@ export interface StagedExpense {
   collectToMe: number
   collectFromMe: number
   yearMonth: number
+  notes?: string
 }
 
 export interface StagedExpenseUpdate {
-  categoryId?: string
+  categoryId?: string | null
   title?: string
   amount?: number
   date?: string
-  notes?: string
+  notes?: string | null
   isShared?: boolean
   collectToMe?: number
   collectFromMe?: number

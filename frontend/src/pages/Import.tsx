@@ -2,12 +2,13 @@ import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Check, X, Trash2, AlertTriangle, Calendar, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
-import { importApi, categoriesApi, StagedExpense } from '@/lib/api'
-import { formatCurrency, formatDate, getYearMonth, parseYearMonth, getMonthName } from '@/lib/utils'
+import { importApi, categoriesApi } from '@/lib/api'
+import { formatCurrency, formatDate, getYearMonth, parseYearMonth, getMonthName, toMinorUnits, fromMinorUnits } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -16,7 +17,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
 
 type Step = 'upload' | 'review' | 'done'
@@ -26,7 +26,7 @@ export function ImportPage() {
   const [step, setStep] = useState<Step>('upload')
   const [selectedExtractor, setSelectedExtractor] = useState<string>('')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [importResult, setImportResult] = useState<{ staged: number; duplicates: number } | null>(null)
+  const [importResult, setImportResult] = useState<{ staged: number; duplicates: number; filteredByMonth?: number } | null>(null)
   const [targetYearMonth, setTargetYearMonth] = useState<number>(getYearMonth())
   const [selectedStaged, setSelectedStaged] = useState<Set<string>>(new Set())
 
@@ -52,7 +52,11 @@ export function ImportPage() {
     mutationFn: ({ file, extractor, yearMonth }: { file: File; extractor: string; yearMonth: number }) =>
       importApi.upload(file, extractor, yearMonth),
     onSuccess: (result) => {
-      setImportResult({ staged: result.staged, duplicates: result.duplicates })
+      setImportResult({ 
+        staged: result.staged, 
+        duplicates: result.duplicates,
+        filteredByMonth: (result as any).filteredByMonth || 0
+      })
       setStep('review')
       refetchStaged()
       toast({ title: 'File processed successfully!' })
@@ -67,7 +71,7 @@ export function ImportPage() {
   })
 
   const updateStagedMutation = useMutation({
-    mutationFn: ({ id, update }: { id: string; update: { categoryId?: string | null } }) =>
+    mutationFn: ({ id, update }: { id: string; update: Parameters<typeof importApi.updateStaged>[1] }) =>
       importApi.updateStaged(id, update),
     onSuccess: () => {
       refetchStaged()
@@ -125,7 +129,7 @@ export function ImportPage() {
   const handleCategoryChange = (stagedId: string, categoryId: string) => {
     updateStagedMutation.mutate({
       id: stagedId,
-      update: { categoryId: categoryId === 'uncategorized' ? null : categoryId },
+      update: { categoryId: categoryId === 'uncategorized' ? undefined : categoryId },
     })
   }
 
@@ -134,7 +138,7 @@ export function ImportPage() {
     ids.forEach((id) => {
       updateStagedMutation.mutate({
         id,
-        update: { categoryId: categoryId === 'uncategorized' ? null : categoryId },
+        update: { categoryId: categoryId === 'uncategorized' ? undefined : categoryId },
       })
     })
     setSelectedStaged(new Set())
@@ -146,20 +150,36 @@ export function ImportPage() {
     setSelectedStaged(new Set())
   }
 
-  // For Import page, we'll use a simple quick-set to half the amount
-  const toggleCollectToMe = (staged: StagedExpense) => {
-    const newValue = staged.collectToMe > 0 ? 0 : Math.abs(staged.amount) / 2
+  // Update settlement amounts (input is in major units, convert to minor units)
+  const handleCollectToMeChange = (stagedId: string, value: string) => {
+    const majorUnits = parseFloat(value) || 0
     updateStagedMutation.mutate({
-      id: staged.id,
-      update: { collectToMe: newValue, collectFromMe: 0 },
+      id: stagedId,
+      update: { collectToMe: toMinorUnits(majorUnits) },
     })
   }
 
-  const toggleCollectFromMe = (staged: StagedExpense) => {
-    const newValue = staged.collectFromMe > 0 ? 0 : Math.abs(staged.amount) / 2
+  const handleCollectFromMeChange = (stagedId: string, value: string) => {
+    const majorUnits = parseFloat(value) || 0
     updateStagedMutation.mutate({
-      id: staged.id,
-      update: { collectFromMe: newValue, collectToMe: 0 },
+      id: stagedId,
+      update: { collectFromMe: toMinorUnits(majorUnits) },
+    })
+  }
+
+  // Handle notes change
+  const handleNotesChange = (stagedId: string, value: string) => {
+    updateStagedMutation.mutate({
+      id: stagedId,
+      update: { notes: value || undefined },
+    })
+  }
+
+  // Handle isShared toggle
+  const handleIsSharedChange = (stagedId: string, isShared: boolean) => {
+    updateStagedMutation.mutate({
+      id: stagedId,
+      update: { isShared },
     })
   }
 
@@ -311,6 +331,9 @@ export function ImportPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Transactions not in this month will be filtered out
+                </p>
               </div>
 
               <Button 
@@ -370,13 +393,16 @@ export function ImportPage() {
                   <Check className="h-8 w-8 text-primary" />
                   <div>
                     <p className="font-medium">
-                      Extracted {importResult.staged} transactions
+                      Extracted {importResult.staged} transactions for {getMonthName(month)} {year}
                     </p>
-                    {importResult.duplicates > 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        {importResult.duplicates} potential duplicates found
-                      </p>
-                    )}
+                    <div className="text-sm text-muted-foreground space-y-0.5">
+                      {importResult.duplicates > 0 && (
+                        <p>{importResult.duplicates} potential duplicates found</p>
+                      )}
+                      {importResult.filteredByMonth && importResult.filteredByMonth > 0 && (
+                        <p>{importResult.filteredByMonth} transactions filtered out (different month)</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -427,7 +453,7 @@ export function ImportPage() {
             <CardHeader>
               <CardTitle>Staged Transactions</CardTitle>
               <CardDescription>
-                Review and categorize before committing
+                Review and categorize before committing. Set notes, shared status, and settlement amounts.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -450,11 +476,21 @@ export function ImportPage() {
                         <th className="p-3 text-left text-sm font-medium text-muted-foreground">Title</th>
                         <th className="p-3 text-left text-sm font-medium text-muted-foreground">Source</th>
                         <th className="p-3 text-left text-sm font-medium text-muted-foreground">Category</th>
+                        <th className="p-3 text-left text-sm font-medium text-muted-foreground">Notes</th>
+                        <th className="p-3 text-center text-sm font-medium text-muted-foreground" title="Joint expense">
+                          Shared
+                        </th>
                         <th className="p-3 text-center text-sm font-medium text-muted-foreground" title="They owe me">
-                          <ArrowDownLeft className="h-4 w-4 mx-auto text-emerald-500" />
+                          <span className="flex items-center gap-1 justify-center">
+                            <ArrowDownLeft className="h-3 w-3 text-emerald-500" />
+                            Collect
+                          </span>
                         </th>
                         <th className="p-3 text-center text-sm font-medium text-muted-foreground" title="I owe them">
-                          <ArrowUpRight className="h-4 w-4 mx-auto text-rose-500" />
+                          <span className="flex items-center gap-1 justify-center">
+                            <ArrowUpRight className="h-3 w-3 text-rose-500" />
+                            Pay
+                          </span>
                         </th>
                         <th className="p-3 text-right text-sm font-medium text-muted-foreground">Amount</th>
                         <th className="p-3 w-10"></th>
@@ -469,9 +505,11 @@ export function ImportPage() {
                               onCheckedChange={() => toggleStaged(staged.id)}
                             />
                           </td>
-                          <td className="p-3 text-sm tabular-nums">{formatDate(staged.date)}</td>
+                          <td className="p-3 text-sm tabular-nums whitespace-nowrap">{formatDate(staged.date)}</td>
                           <td className="p-3">
-                            <div className="font-medium">{staged.title}</div>
+                            <div className="font-medium max-w-[200px] truncate" title={staged.title}>
+                              {staged.title}
+                            </div>
                           </td>
                           <td className="p-3">
                             {staged.source && (
@@ -485,7 +523,7 @@ export function ImportPage() {
                               value={staged.categoryId || 'uncategorized'}
                               onValueChange={(value) => handleCategoryChange(staged.id, value)}
                             >
-                              <SelectTrigger className="w-[150px]">
+                              <SelectTrigger className="w-[130px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -504,31 +542,41 @@ export function ImportPage() {
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleCollectToMe(staged)}
-                              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                staged.collectToMe > 0 
-                                  ? 'bg-emerald-500/20 text-emerald-500' 
-                                  : 'bg-muted text-muted-foreground hover:bg-emerald-500/10'
-                              }`}
-                            >
-                              {staged.collectToMe > 0 ? formatCurrency(staged.collectToMe) : '½'}
-                            </button>
+                          <td className="p-3">
+                            <Input
+                              className="w-[100px] h-8 text-xs"
+                              placeholder="Notes..."
+                              defaultValue={staged.notes || ''}
+                              onBlur={(e) => handleNotesChange(staged.id, e.target.value)}
+                            />
                           </td>
                           <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleCollectFromMe(staged)}
-                              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                staged.collectFromMe > 0 
-                                  ? 'bg-rose-500/20 text-rose-500' 
-                                  : 'bg-muted text-muted-foreground hover:bg-rose-500/10'
-                              }`}
-                            >
-                              {staged.collectFromMe > 0 ? formatCurrency(staged.collectFromMe) : '½'}
-                            </button>
+                            <Checkbox
+                              checked={staged.isShared}
+                              onCheckedChange={(checked) => handleIsSharedChange(staged.id, !!checked)}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-[80px] h-8 text-xs text-center"
+                              placeholder="0"
+                              defaultValue={fromMinorUnits(staged.collectToMe) || ''}
+                              onBlur={(e) => handleCollectToMeChange(staged.id, e.target.value)}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-[80px] h-8 text-xs text-center"
+                              placeholder="0"
+                              defaultValue={fromMinorUnits(staged.collectFromMe) || ''}
+                              onBlur={(e) => handleCollectFromMeChange(staged.id, e.target.value)}
+                            />
                           </td>
                           <td className={`p-3 text-right font-medium tabular-nums ${
                             staged.amount < 0 ? 'text-rose-500' : 'text-emerald-500'
@@ -649,4 +697,3 @@ export function ImportPage() {
     </div>
   )
 }
-

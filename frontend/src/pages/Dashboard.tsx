@@ -1,31 +1,33 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { TrendingUp, TrendingDown, Wallet, PiggyBank, BarChart3, RefreshCw, ChevronLeft, ChevronRight, Camera } from 'lucide-react'
-import { dashboardApi, assetsApi, Asset } from '@/lib/api'
-import { formatCurrency, formatPercent, getYearMonth, parseYearMonth, getMonthName } from '@/lib/utils'
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, RefreshCw, ChevronLeft, ChevronRight, Camera } from 'lucide-react'
+import { dashboardApi, assetsApi } from '@/lib/api'
+import { formatCurrency, formatPercent, getYearMonth, parseYearMonth, getMonthName, fromMinorUnits } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/use-toast'
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
   Cell,
-  LineChart,
-  Line,
   Area,
   AreaChart,
+  PieChart,
+  Pie,
 } from 'recharts'
 
 export function DashboardPage() {
   const queryClient = useQueryClient()
-  const [selectedYearMonth, setSelectedYearMonth] = useState(getYearMonth())
+  const currentYearMonth = getYearMonth() // Current month for comparison
+  const [selectedYearMonth, setSelectedYearMonth] = useState(currentYearMonth)
   const { year, month } = parseYearMonth(selectedYearMonth)
+
+  // Check if we're at the current month (to disable forward navigation)
+  const isAtCurrentMonth = selectedYearMonth >= currentYearMonth
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ['dashboard-summary', selectedYearMonth],
@@ -43,6 +45,14 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['net-worth-history'] })
       toast({ title: 'Net worth snapshot recorded' })
     },
+    onError: (error) => {
+      console.error('Record snapshot error:', error)
+      toast({ 
+        title: 'Failed to record snapshot', 
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive' 
+      })
+    },
   })
 
   const goToPreviousMonth = () => {
@@ -56,13 +66,20 @@ export function DashboardPage() {
   }
 
   const goToNextMonth = () => {
+    // Don't allow navigation past current month
+    if (isAtCurrentMonth) return
+    
     let newMonth = month + 1
     let newYear = year
     if (newMonth > 12) {
       newMonth = 1
       newYear++
     }
-    setSelectedYearMonth(newYear * 100 + newMonth)
+    const newYearMonth = newYear * 100 + newMonth
+    // Double check we're not going past current month
+    if (newYearMonth <= currentYearMonth) {
+      setSelectedYearMonth(newYearMonth)
+    }
   }
 
   const { data: assets, refetch: refetchAssets, isFetching: isRefreshingAssets } = useQuery({
@@ -71,8 +88,14 @@ export function DashboardPage() {
   })
 
   const handleRefreshPrices = async () => {
-    await assetsApi.refreshPrices()
-    refetchAssets()
+    try {
+      await assetsApi.refreshPrices()
+      refetchAssets()
+      toast({ title: 'Stock prices refreshed' })
+    } catch (error) {
+      console.error('Refresh prices error:', error)
+      toast({ title: 'Failed to refresh prices', variant: 'destructive' })
+    }
   }
 
   const stockAssets = assets?.filter((a) => a.type === 'stock' && a.ticker) || []
@@ -85,9 +108,8 @@ export function DashboardPage() {
     )
   }
 
-  const netWorthChange = summary?.netWorth ? (summary.netWorth > 0 ? 'positive' : 'negative') : 'neutral'
-
   // Prepare net worth history for chart (sorted by date, most recent last)
+  // Values are in minor units, need to convert for Y-axis display
   const chartData = [...netWorthHistory]
     .sort((a, b) => a.yearMonth - b.yearMonth)
     .slice(-12) // Last 12 months
@@ -100,6 +122,13 @@ export function DashboardPage() {
         liabilities: snapshot.totalLiabilities,
       }
     })
+
+  // Prepare pie chart data for top spending categories
+  const pieData = summary?.topCategories?.map((cat) => ({
+    name: cat.name,
+    value: cat.amount,
+    color: cat.color,
+  })) || []
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -116,7 +145,12 @@ export function DashboardPage() {
           <span className="text-sm font-medium min-w-[120px] text-center">
             {getMonthName(month)} {year}
           </span>
-          <Button variant="outline" size="icon" onClick={goToNextMonth}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={goToNextMonth}
+            disabled={isAtCurrentMonth}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -190,7 +224,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Monthly Overview + Stock Portfolio */}
+      {/* Monthly Overview + Top Categories */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Monthly Summary */}
         <Card>
@@ -225,38 +259,63 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Top Categories */}
+        {/* Top Categories - Pie Chart */}
         <Card>
           <CardHeader>
             <CardTitle>Top Spending Categories</CardTitle>
             <CardDescription>This month's expenses by category</CardDescription>
           </CardHeader>
           <CardContent>
-            {summary?.topCategories && summary.topCategories.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={summary.topCategories} layout="vertical">
-                  <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={100}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                    {summary.topCategories.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {pieData.length > 0 ? (
+              <div className="space-y-4">
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      innerRadius={50}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        color: 'hsl(var(--foreground))',
+                      }}
+                      labelStyle={{
+                        color: 'hsl(var(--foreground))',
+                      }}
+                      itemStyle={{
+                        color: 'hsl(var(--foreground))',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Legend */}
+                <div className="grid grid-cols-2 gap-2">
+                  {pieData.map((cat) => (
+                    <div key={cat.name} className="flex items-center gap-2 text-sm">
+                      <span
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="truncate">{cat.name}</span>
+                      <span className="ml-auto tabular-nums text-muted-foreground">
+                        {formatCurrency(cat.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="flex items-center justify-center h-[200px] text-muted-foreground">
                 No expenses this month
@@ -301,7 +360,7 @@ export function DashboardPage() {
                 />
                 <YAxis 
                   tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                  tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
+                  tickFormatter={(value) => `${fromMinorUnits(value) / 1000000}M`}
                   tickLine={false}
                   axisLine={false}
                   width={50}
@@ -381,6 +440,7 @@ export function DashboardPage() {
                 </thead>
                 <tbody>
                   {stockAssets.map((asset) => {
+                    // currentPrice is in minor units
                     const value = asset.quantity * (asset.currentPrice || 0) * (asset.ownershipPct / 100)
                     return (
                       <tr key={asset.id} className="border-b last:border-0">
@@ -408,4 +468,3 @@ export function DashboardPage() {
     </div>
   )
 }
-

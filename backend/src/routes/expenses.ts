@@ -7,16 +7,17 @@ import { authMiddleware } from "../middleware/auth.ts";
 const expensesRoutes = new Hono();
 expensesRoutes.use("*", authMiddleware);
 
+// All amounts are in minor units (øre/cents) - integers
 const expenseSchema = z.object({
   categoryId: z.string().uuid().optional().nullable(),
   date: z.string(), // ISO date string
-  amount: z.number(),
+  amount: z.number().int(), // Integer in minor units (e.g., 1250 = 12.50 kr)
   title: z.string().min(1).max(255),
   description: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   isShared: z.boolean().optional(), // Auto-splits expense 50/50
-  collectToMe: z.number().optional(), // Amount to collect from partner
-  collectFromMe: z.number().optional(), // Amount to pay to partner
+  collectToMe: z.number().int().optional(), // Amount to collect from partner (minor units)
+  collectFromMe: z.number().int().optional(), // Amount to pay to partner (minor units)
   settled: z.boolean().optional(),
   yearMonth: z.number().optional(),
 });
@@ -38,12 +39,8 @@ expensesRoutes.get("/", async (c) => {
     orderBy: (expenses, { desc }) => [desc(expenses.date)],
   });
 
-  return c.json(userExpenses.map((expense) => ({
-    ...expense,
-    amount: parseFloat(expense.amount),
-    collectToMe: parseFloat(expense.collectToMe),
-    collectFromMe: parseFloat(expense.collectFromMe),
-  })));
+  // With bigint mode: "number", amounts come back as actual numbers
+  return c.json(userExpenses);
 });
 
 // Get expense stats by month
@@ -63,27 +60,29 @@ expensesRoutes.get("/stats", async (c) => {
   });
 
   // Total expenses: shared expenses count as half (your portion from joint account)
+  // Amounts are now integers in minor units
   const total = userExpenses.reduce((sum, e) => {
-    const amount = parseFloat(e.amount);
-    return sum + (e.isShared ? amount / 2 : amount);
+    const amount = e.amount;
+    return sum + (e.isShared ? Math.floor(amount / 2) : amount);
   }, 0);
   
-  // Calculate settlement totals (amounts, not booleans)
-  const collectToMe = userExpenses
-    .filter(e => parseFloat(e.collectToMe) > 0 && !e.settled)
-    .reduce((sum, e) => sum + parseFloat(e.collectToMe), 0);
+  // Calculate settlement totals (amounts in minor units)
+  // Return separate totals for UI display
+  const totalCollectToMe = userExpenses
+    .filter(e => e.collectToMe > 0 && !e.settled)
+    .reduce((sum, e) => sum + e.collectToMe, 0);
   
-  const collectFromMe = userExpenses
-    .filter(e => parseFloat(e.collectFromMe) > 0 && !e.settled)
-    .reduce((sum, e) => sum + parseFloat(e.collectFromMe), 0);
+  const totalCollectFromMe = userExpenses
+    .filter(e => e.collectFromMe > 0 && !e.settled)
+    .reduce((sum, e) => sum + e.collectFromMe, 0);
 
   const settledToMe = userExpenses
-    .filter(e => parseFloat(e.collectToMe) > 0 && e.settled)
-    .reduce((sum, e) => sum + parseFloat(e.collectToMe), 0);
+    .filter(e => e.collectToMe > 0 && e.settled)
+    .reduce((sum, e) => sum + e.collectToMe, 0);
 
   const settledFromMe = userExpenses
-    .filter(e => parseFloat(e.collectFromMe) > 0 && e.settled)
-    .reduce((sum, e) => sum + parseFloat(e.collectFromMe), 0);
+    .filter(e => e.collectFromMe > 0 && e.settled)
+    .reduce((sum, e) => sum + e.collectFromMe, 0);
 
   // Group by category (shared expenses count as half)
   const byCategory = new Map<string, { name: string; color: string; amount: number; count: number }>();
@@ -92,8 +91,8 @@ expensesRoutes.get("/stats", async (c) => {
     const catId = expense.categoryId || "uncategorized";
     const catName = expense.category?.name || "Uncategorized";
     const catColor = expense.category?.color || "#6b7280";
-    const amount = parseFloat(expense.amount);
-    const effectiveAmount = expense.isShared ? amount / 2 : amount;
+    const amount = expense.amount;
+    const effectiveAmount = expense.isShared ? Math.floor(amount / 2) : amount;
     
     const existing = byCategory.get(catId) || { name: catName, color: catColor, amount: 0, count: 0 };
     existing.amount += effectiveAmount;
@@ -104,11 +103,11 @@ expensesRoutes.get("/stats", async (c) => {
   return c.json({
     total,
     count: userExpenses.length,
-    collectToMe,
-    collectFromMe,
+    totalCollectToMe,       // Renamed: total amount others owe you
+    totalCollectFromMe,     // Renamed: total amount you owe others
     settledToMe,
     settledFromMe,
-    netSettlement: collectToMe - collectFromMe, // Positive means they owe you
+    netSettlement: totalCollectToMe - totalCollectFromMe, // Positive means they owe you
     byCategory: Array.from(byCategory.entries()).map(([categoryId, data]) => ({
       categoryId,
       ...data,
@@ -129,13 +128,13 @@ expensesRoutes.post("/", async (c) => {
         userId: user.id,
         categoryId: data.categoryId || null,
         date: data.date,
-        amount: data.amount.toString(),
+        amount: data.amount,
         title: data.title,
         description: data.description || null,
         notes: data.notes || null,
         isShared: data.isShared ?? false,
-        collectToMe: (data.collectToMe ?? 0).toString(),
-        collectFromMe: (data.collectFromMe ?? 0).toString(),
+        collectToMe: data.collectToMe ?? 0,
+        collectFromMe: data.collectFromMe ?? 0,
         settled: data.settled ?? false,
         yearMonth: data.yearMonth!,
       })
@@ -147,12 +146,7 @@ expensesRoutes.post("/", async (c) => {
       with: { category: true },
     });
 
-    return c.json({
-      ...created,
-      amount: parseFloat(created!.amount),
-      collectToMe: parseFloat(created!.collectToMe),
-      collectFromMe: parseFloat(created!.collectFromMe),
-    }, 201);
+    return c.json(created, 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -175,13 +169,13 @@ expensesRoutes.put("/:id", async (c) => {
       .set({
         categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
         date: data.date,
-        amount: data.amount?.toString(),
+        amount: data.amount,
         title: data.title,
         description: data.description,
         notes: data.notes,
         isShared: data.isShared,
-        collectToMe: data.collectToMe?.toString(),
-        collectFromMe: data.collectFromMe?.toString(),
+        collectToMe: data.collectToMe,
+        collectFromMe: data.collectFromMe,
         settled: data.settled,
         yearMonth: data.yearMonth,
       })
@@ -198,12 +192,7 @@ expensesRoutes.put("/:id", async (c) => {
       with: { category: true },
     });
 
-    return c.json({
-      ...result,
-      amount: parseFloat(result!.amount),
-      collectToMe: parseFloat(result!.collectToMe),
-      collectFromMe: parseFloat(result!.collectFromMe),
-    });
+    return c.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -224,8 +213,8 @@ expensesRoutes.put("/bulk", async (c) => {
         categoryId: z.string().uuid().optional().nullable(),
         notes: z.string().optional().nullable(),
         isShared: z.boolean().optional(),
-        collectToMe: z.number().optional(),
-        collectFromMe: z.number().optional(),
+        collectToMe: z.number().int().optional(),
+        collectFromMe: z.number().int().optional(),
         settled: z.boolean().optional(),
       })),
     }).parse(body);
@@ -239,8 +228,8 @@ expensesRoutes.put("/bulk", async (c) => {
           categoryId: update.categoryId !== undefined ? (update.categoryId || null) : undefined,
           notes: update.notes,
           isShared: update.isShared,
-          collectToMe: update.collectToMe?.toString(),
-          collectFromMe: update.collectFromMe?.toString(),
+          collectToMe: update.collectToMe,
+          collectFromMe: update.collectFromMe,
           settled: update.settled,
         })
         .where(and(eq(expenses.id, update.id), eq(expenses.userId, user.id)))
@@ -251,12 +240,7 @@ expensesRoutes.put("/bulk", async (c) => {
           where: eq(expenses.id, updated.id),
           with: { category: true },
         });
-        results.push({
-          ...result,
-          amount: parseFloat(result!.amount),
-          collectToMe: parseFloat(result!.collectToMe),
-          collectFromMe: parseFloat(result!.collectFromMe),
-        });
+        results.push(result);
       }
     }
 
@@ -296,13 +280,16 @@ expensesRoutes.delete("/bulk", async (c) => {
       ids: z.array(z.string().uuid()),
     }).parse(body);
 
+    let deletedCount = 0;
     for (const id of ids) {
-      await db
+      const result = await db
         .delete(expenses)
-        .where(and(eq(expenses.id, id), eq(expenses.userId, user.id)));
+        .where(and(eq(expenses.id, id), eq(expenses.userId, user.id)))
+        .returning();
+      if (result.length > 0) deletedCount++;
     }
 
-    return c.body(null, 204);
+    return c.json({ deleted: deletedCount });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -313,4 +300,3 @@ expensesRoutes.delete("/bulk", async (c) => {
 });
 
 export { expensesRoutes };
-

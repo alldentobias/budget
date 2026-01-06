@@ -7,9 +7,10 @@ import { authMiddleware } from "../middleware/auth.ts";
 const incomesRoutes = new Hono();
 incomesRoutes.use("*", authMiddleware);
 
+// Amount is in minor units (øre/cents) - integers
 const incomeSchema = z.object({
   yearMonth: z.number(),
-  amount: z.number().positive(),
+  amount: z.number().int().positive(), // Integer in minor units
   source: z.string().min(1).max(255),
   notes: z.string().optional().nullable(),
 });
@@ -28,10 +29,8 @@ incomesRoutes.get("/", async (c) => {
     orderBy: (incomes, { desc }) => [desc(incomes.createdAt)],
   });
 
-  return c.json(userIncomes.map((income) => ({
-    ...income,
-    amount: parseFloat(income.amount),
-  })));
+  // With bigint mode: "number", amounts come back as actual numbers
+  return c.json(userIncomes);
 });
 
 // Create a new income
@@ -46,16 +45,13 @@ incomesRoutes.post("/", async (c) => {
       .values({
         userId: user.id,
         yearMonth: data.yearMonth,
-        amount: data.amount.toString(),
+        amount: data.amount,
         source: data.source,
         notes: data.notes || null,
       })
       .returning();
 
-    return c.json({
-      ...newIncome,
-      amount: parseFloat(newIncome.amount),
-    }, 201);
+    return c.json(newIncome, 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -77,7 +73,7 @@ incomesRoutes.put("/:id", async (c) => {
       .update(incomes)
       .set({
         yearMonth: data.yearMonth,
-        amount: data.amount?.toString(),
+        amount: data.amount,
         source: data.source,
         notes: data.notes,
       })
@@ -88,10 +84,7 @@ incomesRoutes.put("/:id", async (c) => {
       return c.json({ message: "Income not found" }, 404);
     }
 
-    return c.json({
-      ...updated,
-      amount: parseFloat(updated.amount),
-    });
+    return c.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -119,5 +112,3 @@ incomesRoutes.delete("/:id", async (c) => {
 });
 
 export { incomesRoutes };
-
-

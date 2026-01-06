@@ -6,6 +6,12 @@ import { authMiddleware } from "../middleware/auth.ts";
 const exportRoutes = new Hono();
 exportRoutes.use("*", authMiddleware);
 
+// Helper to convert minor units to major units for display
+function toMajorUnits(minorUnits: number | null | undefined): number | null {
+  if (minorUnits == null) return null;
+  return minorUnits / 100;
+}
+
 // Export all data
 exportRoutes.get("/all", async (c) => {
   const user = c.get("user");
@@ -31,40 +37,43 @@ exportRoutes.get("/all", async (c) => {
     }),
   ]);
 
+  // Convert from minor units to major units for human-readable export
   const data = {
     exportDate: new Date().toISOString(),
     expenses: userExpenses.map((e) => ({
       ...e,
-      amount: parseFloat(e.amount),
+      amount: toMajorUnits(e.amount),
+      collectToMe: toMajorUnits(e.collectToMe),
+      collectFromMe: toMajorUnits(e.collectFromMe),
     })),
     assets: userAssets.map((a) => ({
       ...a,
       quantity: parseFloat(a.quantity),
-      manualValue: a.manualValue ? parseFloat(a.manualValue) : null,
-      currentPrice: a.currentPrice ? parseFloat(a.currentPrice) : null,
+      manualValue: toMajorUnits(a.manualValue),
+      currentPrice: toMajorUnits(a.currentPrice),
       ownershipPct: parseFloat(a.ownershipPct),
     })),
     loans: userLoans.map((l) => ({
       ...l,
-      principal: parseFloat(l.principal),
-      currentBalance: parseFloat(l.currentBalance),
+      principal: toMajorUnits(l.principal),
+      currentBalance: toMajorUnits(l.currentBalance),
       interestRate: parseFloat(l.interestRate),
       ownershipPct: parseFloat(l.ownershipPct),
     })),
     incomes: userIncomes.map((i) => ({
       ...i,
-      amount: parseFloat(i.amount),
+      amount: toMajorUnits(i.amount),
     })),
     categories: userCategories,
   };
 
   if (format === "csv") {
-    // Create a simple CSV for expenses only
+    // Create a simple CSV for expenses only (human-readable amounts)
     const headers = ["Date", "Title", "Amount", "Category", "Description", "Notes", "YearMonth"];
     const rows = userExpenses.map((e) => [
       e.date,
       `"${e.title.replace(/"/g, '""')}"`,
-      parseFloat(e.amount),
+      toMajorUnits(e.amount),
       e.category?.name || "",
       e.description ? `"${e.description.replace(/"/g, '""')}"` : "",
       e.notes ? `"${e.notes.replace(/"/g, '""')}"` : "",
@@ -108,7 +117,9 @@ exportRoutes.get("/expenses", async (c) => {
   if (format === "json") {
     const data = userExpenses.map((e) => ({
       ...e,
-      amount: parseFloat(e.amount),
+      amount: toMajorUnits(e.amount),
+      collectToMe: toMajorUnits(e.collectToMe),
+      collectFromMe: toMajorUnits(e.collectFromMe),
     }));
 
     return new Response(JSON.stringify(data, null, 2), {
@@ -119,12 +130,12 @@ exportRoutes.get("/expenses", async (c) => {
     });
   }
 
-  // CSV format
+  // CSV format (human-readable amounts)
   const headers = ["Date", "Title", "Amount", "Category", "Description", "Notes"];
   const rows = userExpenses.map((e) => [
     e.date,
     `"${e.title.replace(/"/g, '""')}"`,
-    parseFloat(e.amount),
+    toMajorUnits(e.amount),
     e.category?.name || "",
     e.description ? `"${e.description.replace(/"/g, '""')}"` : "",
     e.notes ? `"${e.notes.replace(/"/g, '""')}"` : "",
@@ -141,5 +152,3 @@ exportRoutes.get("/expenses", async (c) => {
 });
 
 export { exportRoutes };
-
-

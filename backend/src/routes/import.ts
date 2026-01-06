@@ -10,6 +10,12 @@ importRoutes.use("*", authMiddleware);
 const PYTHON_SERVICE_URL = Deno.env.get("PYTHON_SERVICE_URL") ||
   "http://localhost:8001";
 
+// Helper to get yearMonth from a date string
+function dateToYearMonth(dateStr: string): number {
+  const date = new Date(dateStr);
+  return date.getFullYear() * 100 + (date.getMonth() + 1);
+}
+
 // Get available extractors from Python service
 importRoutes.get("/extractors", async (c) => {
   try {
@@ -57,7 +63,25 @@ importRoutes.post("/upload", async (c) => {
     }
 
     const result = await response.json();
-    const transactions = result.transactions;
+    let transactions = result.transactions;
+
+    // Filter transactions by target month if specified
+    if (targetYearMonth) {
+      transactions = transactions.filter((tx: { date: string }) => {
+        const txYearMonth = dateToYearMonth(tx.date);
+        return txYearMonth === targetYearMonth;
+      });
+    }
+
+    // Clear existing staged expenses for this month to avoid confusion
+    if (targetYearMonth) {
+      await db
+        .delete(stagedExpenses)
+        .where(and(
+          eq(stagedExpenses.userId, user.id),
+          eq(stagedExpenses.yearMonth, targetYearMonth),
+        ));
+    }
 
     // Get existing expenses to check for duplicates
     const existingExpenses = await db.query.expenses.findMany({
@@ -65,24 +89,22 @@ importRoutes.post("/upload", async (c) => {
     });
 
     let duplicateCount = 0;
+    let filteredCount = result.transactions.length - transactions.length;
     const staged = [];
 
     for (const tx of transactions) {
       // Use target yearMonth if provided, otherwise calculate from date
-      let yearMonth: number;
-      if (targetYearMonth) {
-        yearMonth = targetYearMonth;
-      } else {
-        const date = new Date(tx.date);
-        yearMonth = date.getFullYear() * 100 + (date.getMonth() + 1);
-      }
+      const yearMonth = targetYearMonth || dateToYearMonth(tx.date);
 
-      // Check for duplicates (same title, date, and amount)
+      // Amount is now in minor units (integer) from Python service
+      const amount = tx.amount;
+
+      // Check for duplicates (same title, date, and amount - exact integer comparison)
       const duplicate = existingExpenses.find(
         (e) =>
           e.title === tx.title &&
           e.date === tx.date &&
-          parseFloat(e.amount) === tx.amount,
+          e.amount === amount,
       );
 
       const isDuplicate = !!duplicate;
@@ -93,14 +115,17 @@ importRoutes.post("/upload", async (c) => {
         .values({
           userId: user.id,
           date: tx.date,
-          amount: tx.amount.toString(),
+          amount: amount,
           title: tx.title,
           source: tx.source || null,
           rawData: tx.raw_data || null,
-          isShared: tx.is_shared || false,
+          isShared: tx.isShared || false,
           isDuplicate,
           duplicateOf: duplicate?.id || null,
           yearMonth,
+          collectToMe: 0,
+          collectFromMe: 0,
+          notes: null,
         })
         .returning();
 
@@ -112,6 +137,7 @@ importRoutes.post("/upload", async (c) => {
       message: `Extracted ${transactions.length} transactions`,
       staged: staged.length,
       duplicates: duplicateCount,
+      filteredByMonth: filteredCount,
     });
   } catch (error) {
     console.error("Upload error:", error);
@@ -139,10 +165,8 @@ importRoutes.get("/staged", async (c) => {
     orderBy: (stagedExpenses, { desc }) => [desc(stagedExpenses.date)],
   });
 
-  return c.json(staged.map((s) => ({
-    ...s,
-    amount: parseFloat(s.amount),
-  })));
+  // With bigint mode: "number", amounts come back as actual numbers
+  return c.json(staged);
 });
 
 // Update a staged expense
@@ -155,11 +179,12 @@ importRoutes.put("/staged/:id", async (c) => {
     const data = z.object({
       categoryId: z.string().uuid().optional().nullable(),
       title: z.string().optional(),
-      amount: z.number().optional(),
+      amount: z.number().int().optional(), // Integer in minor units
       date: z.string().optional(),
       notes: z.string().optional().nullable(),
-      collectToMe: z.number().optional(),
-      collectFromMe: z.number().optional(),
+      isShared: z.boolean().optional(),
+      collectToMe: z.number().int().optional(), // Integer in minor units
+      collectFromMe: z.number().int().optional(), // Integer in minor units
     }).parse(body);
 
     const [updated] = await db
@@ -169,11 +194,12 @@ importRoutes.put("/staged/:id", async (c) => {
           ? (data.categoryId || null)
           : undefined,
         title: data.title,
-        amount: data.amount?.toString(),
+        amount: data.amount,
         date: data.date,
         notes: data.notes,
-        collectToMe: data.collectToMe?.toString(),
-        collectFromMe: data.collectFromMe?.toString(),
+        isShared: data.isShared,
+        collectToMe: data.collectToMe,
+        collectFromMe: data.collectFromMe,
       })
       .where(
         and(
@@ -192,10 +218,7 @@ importRoutes.put("/staged/:id", async (c) => {
       with: { category: true },
     });
 
-    return c.json({
-      ...result,
-      amount: parseFloat(result!.amount),
-    });
+    return c.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ message: "Invalid input", errors: error.errors }, 400);
@@ -257,6 +280,7 @@ importRoutes.post("/commit", async (c) => {
         notes: staged.notes,
         source: staged.source,
         sourceFile: "import",
+        isShared: staged.isShared,
         collectToMe: staged.collectToMe,
         collectFromMe: staged.collectFromMe,
         yearMonth: staged.yearMonth,

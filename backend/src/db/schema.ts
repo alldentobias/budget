@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, decimal, integer, boolean, timestamp, text, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, decimal, integer, boolean, timestamp, text, date, bigint } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
@@ -17,20 +17,22 @@ export const categories = pgTable("categories", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// All monetary amounts are stored as integers in minor units (øre/cents)
+// e.g., 12.50 kr is stored as 1250
 export const expenses = pgTable("expenses", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
   date: date("date").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   notes: text("notes"),
   source: varchar("source", { length: 100 }),
   sourceFile: varchar("source_file", { length: 255 }),
   isShared: boolean("is_shared").default(false).notNull(),
-  collectToMe: decimal("collect_to_me", { precision: 12, scale: 2 }).default("0").notNull(),
-  collectFromMe: decimal("collect_from_me", { precision: 12, scale: 2 }).default("0").notNull(),
+  collectToMe: bigint("collect_to_me", { mode: "number" }).default(0).notNull(),
+  collectFromMe: bigint("collect_from_me", { mode: "number" }).default(0).notNull(),
   settled: boolean("settled").default(false).notNull(),
   yearMonth: integer("year_month").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -41,15 +43,15 @@ export const stagedExpenses = pgTable("staged_expenses", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
   date: date("date").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   source: varchar("source", { length: 100 }),
   rawData: text("raw_data"),
   isDuplicate: boolean("is_duplicate").default(false).notNull(),
   duplicateOf: uuid("duplicate_of").references(() => expenses.id, { onDelete: "set null" }),
   isShared: boolean("is_shared").default(false).notNull(),
-  collectToMe: decimal("collect_to_me", { precision: 12, scale: 2 }).default("0").notNull(),
-  collectFromMe: decimal("collect_from_me", { precision: 12, scale: 2 }).default("0").notNull(),
+  collectToMe: bigint("collect_to_me", { mode: "number" }).default(0).notNull(),
+  collectFromMe: bigint("collect_from_me", { mode: "number" }).default(0).notNull(),
   yearMonth: integer("year_month").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -62,8 +64,8 @@ export const assets = pgTable("assets", {
   name: varchar("name", { length: 255 }).notNull(),
   ticker: varchar("ticker", { length: 20 }),
   quantity: decimal("quantity", { precision: 18, scale: 8 }).notNull().default("0"),
-  manualValue: decimal("manual_value", { precision: 12, scale: 2 }),
-  currentPrice: decimal("current_price", { precision: 12, scale: 4 }),
+  manualValue: bigint("manual_value", { mode: "number" }),
+  currentPrice: bigint("current_price", { mode: "number" }),
   ownershipPct: decimal("ownership_pct", { precision: 5, scale: 2 }).notNull().default("100"),
   lastPriceUpdate: timestamp("last_price_update"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -73,8 +75,8 @@ export const loans = pgTable("loans", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  principal: decimal("principal", { precision: 12, scale: 2 }).notNull(),
-  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).notNull(),
+  principal: bigint("principal", { mode: "number" }).notNull(),
+  currentBalance: bigint("current_balance", { mode: "number" }).notNull(),
   interestRate: decimal("interest_rate", { precision: 5, scale: 2 }).notNull(),
   ownershipPct: decimal("ownership_pct", { precision: 5, scale: 2 }).notNull().default("100"),
   notes: text("notes"),
@@ -85,7 +87,7 @@ export const incomes = pgTable("incomes", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   yearMonth: integer("year_month").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
   source: varchar("source", { length: 255 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -95,9 +97,9 @@ export const netWorthSnapshots = pgTable("net_worth_snapshots", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   yearMonth: integer("year_month").notNull(),
-  totalAssets: decimal("total_assets", { precision: 12, scale: 2 }).notNull(),
-  totalLiabilities: decimal("total_liabilities", { precision: 12, scale: 2 }).notNull(),
-  netWorth: decimal("net_worth", { precision: 12, scale: 2 }).notNull(),
+  totalAssets: bigint("total_assets", { mode: "number" }).notNull(),
+  totalLiabilities: bigint("total_liabilities", { mode: "number" }).notNull(),
+  netWorth: bigint("net_worth", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -174,4 +176,3 @@ export const netWorthSnapshotsRelations = relations(netWorthSnapshots, ({ one })
     references: [users.id],
   }),
 }));
-

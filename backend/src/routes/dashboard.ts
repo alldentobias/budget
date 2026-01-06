@@ -58,49 +58,51 @@ dashboardRoutes.get("/summary", async (c) => {
     }),
   ]);
 
-  // Calculate total assets
+  // Calculate total assets (all amounts are in minor units)
   let totalAssets = 0;
   let stockPortfolioValue = 0;
 
   for (const asset of userAssets) {
     const ownership = parseFloat(asset.ownershipPct) / 100;
 
-    if (asset.type === "stock" && asset.currentPrice) {
-      const value = parseFloat(asset.quantity) *
-        parseFloat(asset.currentPrice) * ownership;
+    if (asset.type === "stock" && asset.currentPrice != null) {
+      // currentPrice is in minor units, quantity is decimal
+      const value = parseFloat(asset.quantity) * asset.currentPrice * ownership;
       totalAssets += value;
       stockPortfolioValue += value;
-    } else if (asset.manualValue) {
-      totalAssets += parseFloat(asset.manualValue) * ownership;
+    } else if (asset.manualValue != null) {
+      // manualValue is in minor units
+      totalAssets += asset.manualValue * ownership;
     }
   }
 
-  // Calculate total liabilities
+  // Calculate total liabilities (all amounts are in minor units)
   let totalLiabilities = 0;
   for (const loan of userLoans) {
     const ownership = parseFloat(loan.ownershipPct) / 100;
-    totalLiabilities += parseFloat(loan.currentBalance) * ownership;
+    totalLiabilities += loan.currentBalance * ownership;
   }
 
-  // Net worth
+  // Net worth (in minor units)
   const netWorth = totalAssets - totalLiabilities;
 
-  // Debt to asset ratio
+  // Debt to asset ratio (percentage)
   const debtToAssetRatio = totalAssets > 0
     ? (totalLiabilities / totalAssets) * 100
     : 0;
 
   // Monthly expenses (positive amounts are expenses, shared expenses count as half)
+  // amounts are in minor units
   const expensesTotal = monthlyExpenses
-    .filter((e) => parseFloat(e.amount) > 0)
+    .filter((e) => e.amount > 0)
     .reduce((sum, e) => {
-      const amount = Math.abs(parseFloat(e.amount));
-      return sum + (e.isShared ? amount / 2 : amount);
+      const amount = e.amount;
+      return sum + (e.isShared ? Math.floor(amount / 2) : amount);
     }, 0);
 
-  // Monthly income
+  // Monthly income (in minor units)
   const incomeTotal = monthlyIncomes.reduce(
-    (sum, i) => sum + parseFloat(i.amount),
+    (sum, i) => sum + i.amount,
     0,
   );
 
@@ -111,13 +113,13 @@ dashboardRoutes.get("/summary", async (c) => {
   >();
 
   for (const expense of monthlyExpenses) {
-    if (parseFloat(expense.amount) <= 0) continue; // Skip non-expenses
+    if (expense.amount <= 0) continue; // Skip non-expenses
 
     const catId = expense.categoryId || "uncategorized";
     const catName = expense.category?.name || "Uncategorized";
     const catColor = expense.category?.color || "#6b7280";
-    const amount = Math.abs(parseFloat(expense.amount));
-    const effectiveAmount = expense.isShared ? amount / 2 : amount;
+    const amount = expense.amount;
+    const effectiveAmount = expense.isShared ? Math.floor(amount / 2) : amount;
 
     const existing = categorySpending.get(catId) ||
       { name: catName, color: catColor, amount: 0 };
@@ -150,12 +152,8 @@ dashboardRoutes.get("/net-worth-history", async (c) => {
     orderBy: [desc(netWorthSnapshots.yearMonth)],
   });
 
-  return c.json(snapshots.map((s) => ({
-    ...s,
-    totalAssets: parseFloat(s.totalAssets),
-    totalLiabilities: parseFloat(s.totalLiabilities),
-    netWorth: parseFloat(s.netWorth),
-  })));
+  // Values are already numbers (bigint mode: "number")
+  return c.json(snapshots);
 });
 
 // Record a net worth snapshot for current month
@@ -176,18 +174,17 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
   let totalAssets = 0;
   for (const asset of userAssets) {
     const ownership = parseFloat(asset.ownershipPct) / 100;
-    if (asset.type === "stock" && asset.currentPrice) {
-      totalAssets += parseFloat(asset.quantity) *
-        parseFloat(asset.currentPrice) * ownership;
-    } else if (asset.manualValue) {
-      totalAssets += parseFloat(asset.manualValue) * ownership;
+    if (asset.type === "stock" && asset.currentPrice != null) {
+      totalAssets += Math.round(parseFloat(asset.quantity) * asset.currentPrice * ownership);
+    } else if (asset.manualValue != null) {
+      totalAssets += Math.round(asset.manualValue * ownership);
     }
   }
 
   let totalLiabilities = 0;
   for (const loan of userLoans) {
     const ownership = parseFloat(loan.ownershipPct) / 100;
-    totalLiabilities += parseFloat(loan.currentBalance) * ownership;
+    totalLiabilities += Math.round(loan.currentBalance * ownership);
   }
 
   const netWorth = totalAssets - totalLiabilities;
@@ -206,9 +203,9 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
     const [updated] = await db
       .update(netWorthSnapshots)
       .set({
-        totalAssets: totalAssets.toString(),
-        totalLiabilities: totalLiabilities.toString(),
-        netWorth: netWorth.toString(),
+        totalAssets: totalAssets,
+        totalLiabilities: totalLiabilities,
+        netWorth: netWorth,
       })
       .where(eq(netWorthSnapshots.id, existing.id))
       .returning();
@@ -220,20 +217,15 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
       .values({
         userId: user.id,
         yearMonth: currentYearMonth,
-        totalAssets: totalAssets.toString(),
-        totalLiabilities: totalLiabilities.toString(),
-        netWorth: netWorth.toString(),
+        totalAssets: totalAssets,
+        totalLiabilities: totalLiabilities,
+        netWorth: netWorth,
       })
       .returning();
     snapshot = created;
   }
 
-  return c.json({
-    ...snapshot,
-    totalAssets: parseFloat(snapshot.totalAssets),
-    totalLiabilities: parseFloat(snapshot.totalLiabilities),
-    netWorth: parseFloat(snapshot.netWorth),
-  });
+  return c.json(snapshot);
 });
 
 export { dashboardRoutes };

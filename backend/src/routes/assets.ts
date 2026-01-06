@@ -8,14 +8,22 @@ import yahooFinance from "yahoo-finance2";
 const assetsRoutes = new Hono();
 assetsRoutes.use("*", authMiddleware);
 
+// manualValue and currentPrice are in minor units (øre/cents) - integers
+// quantity stays as decimal for fractional shares
 const assetSchema = z.object({
   type: z.enum(["stock", "property", "cash", "other"]),
   name: z.string().min(1).max(255),
   ticker: z.string().max(20).optional().nullable(),
   quantity: z.number().default(0),
-  manualValue: z.number().optional().nullable(),
+  manualValue: z.number().int().optional().nullable(), // Integer in minor units
   ownershipPct: z.number().min(0).max(100).default(100),
 });
+
+// Helper to convert stock price to minor units (multiply by 100)
+function priceToMinorUnits(price: number | null | undefined): number | null {
+  if (price == null) return null;
+  return Math.round(price * 100);
+}
 
 // Get all assets for the current user
 assetsRoutes.get("/", async (c) => {
@@ -26,12 +34,12 @@ assetsRoutes.get("/", async (c) => {
     orderBy: (assets, { desc }) => [desc(assets.createdAt)],
   });
 
+  // quantity and ownershipPct are still decimals stored as strings
   return c.json(userAssets.map((asset) => ({
     ...asset,
     quantity: parseFloat(asset.quantity),
-    manualValue: asset.manualValue ? parseFloat(asset.manualValue) : null,
-    currentPrice: asset.currentPrice ? parseFloat(asset.currentPrice) : null,
     ownershipPct: parseFloat(asset.ownershipPct),
+    // manualValue and currentPrice are bigint, come back as numbers
   })));
 });
 
@@ -47,7 +55,7 @@ assetsRoutes.post("/", async (c) => {
     if (data.type === "stock" && data.ticker) {
       try {
         const quote = await yahooFinance.quote(data.ticker);
-        currentPrice = quote.regularMarketPrice || null;
+        currentPrice = priceToMinorUnits(quote.regularMarketPrice);
       } catch (e) {
         console.warn(`Could not fetch price for ${data.ticker}:`, e);
       }
@@ -61,8 +69,8 @@ assetsRoutes.post("/", async (c) => {
         name: data.name,
         ticker: data.ticker || null,
         quantity: data.quantity.toString(),
-        manualValue: data.manualValue?.toString() || null,
-        currentPrice: currentPrice?.toString() || null,
+        manualValue: data.manualValue ?? null,
+        currentPrice: currentPrice,
         ownershipPct: data.ownershipPct.toString(),
         lastPriceUpdate: currentPrice ? new Date() : null,
       })
@@ -71,8 +79,6 @@ assetsRoutes.post("/", async (c) => {
     return c.json({
       ...newAsset,
       quantity: parseFloat(newAsset.quantity),
-      manualValue: newAsset.manualValue ? parseFloat(newAsset.manualValue) : null,
-      currentPrice: newAsset.currentPrice ? parseFloat(newAsset.currentPrice) : null,
       ownershipPct: parseFloat(newAsset.ownershipPct),
     }, 201);
   } catch (error) {
@@ -108,7 +114,7 @@ assetsRoutes.put("/:id", async (c) => {
     if (data.ticker && data.ticker !== existing.ticker) {
       try {
         const quote = await yahooFinance.quote(data.ticker);
-        currentPrice = quote.regularMarketPrice?.toString() || null;
+        currentPrice = priceToMinorUnits(quote.regularMarketPrice);
         lastPriceUpdate = new Date();
       } catch (e) {
         console.warn(`Could not fetch price for ${data.ticker}:`, e);
@@ -122,7 +128,7 @@ assetsRoutes.put("/:id", async (c) => {
         name: data.name,
         ticker: data.ticker !== undefined ? (data.ticker || null) : existing.ticker,
         quantity: data.quantity !== undefined ? data.quantity.toString() : existing.quantity,
-        manualValue: data.manualValue !== undefined ? (data.manualValue?.toString() || null) : existing.manualValue,
+        manualValue: data.manualValue !== undefined ? data.manualValue : existing.manualValue,
         currentPrice,
         ownershipPct: data.ownershipPct !== undefined ? data.ownershipPct.toString() : existing.ownershipPct,
         lastPriceUpdate,
@@ -133,8 +139,6 @@ assetsRoutes.put("/:id", async (c) => {
     return c.json({
       ...updated,
       quantity: parseFloat(updated.quantity),
-      manualValue: updated.manualValue ? parseFloat(updated.manualValue) : null,
-      currentPrice: updated.currentPrice ? parseFloat(updated.currentPrice) : null,
       ownershipPct: parseFloat(updated.ownershipPct),
     });
   } catch (error) {
@@ -181,7 +185,7 @@ assetsRoutes.post("/refresh-prices", async (c) => {
       await db
         .update(assets)
         .set({
-          currentPrice: quote.regularMarketPrice?.toString() || null,
+          currentPrice: priceToMinorUnits(quote.regularMarketPrice),
           lastPriceUpdate: new Date(),
         })
         .where(eq(assets.id, asset.id));
@@ -199,12 +203,8 @@ assetsRoutes.post("/refresh-prices", async (c) => {
   return c.json(updated.map((asset) => ({
     ...asset,
     quantity: parseFloat(asset.quantity),
-    manualValue: asset.manualValue ? parseFloat(asset.manualValue) : null,
-    currentPrice: asset.currentPrice ? parseFloat(asset.currentPrice) : null,
     ownershipPct: parseFloat(asset.ownershipPct),
   })));
 });
 
 export { assetsRoutes };
-
-

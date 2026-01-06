@@ -1,6 +1,10 @@
 """
 Norwegian Bank Extractors
 Handles exports from DNB, American Express (Norway), and Sparebank1
+
+All amounts are returned in minor units (øre/cents):
+  - 12.50 kr -> 1250
+  - 100.00 kr -> 10000
 """
 import pandas as pd
 import io
@@ -11,18 +15,23 @@ from app.schemas import ExtractedTransaction
 from app.extractors import register_extractor
 
 
-def parse_norwegian_amount(amount) -> float:
-    """Parse Norwegian formatted amounts (comma as decimal separator)"""
+def to_minor_units(amount: float) -> int:
+    """Convert amount from major units (kr) to minor units (øre), rounding to integer"""
+    return round(abs(amount) * 100)
+
+
+def parse_norwegian_amount(amount) -> int:
+    """Parse Norwegian formatted amounts (comma as decimal separator) to minor units"""
     if pd.isna(amount):
-        return 0.0
+        return 0
     if isinstance(amount, (int, float)):
-        return abs(float(amount))
+        return to_minor_units(float(amount))
     # Handle string with comma as decimal separator
     amount_str = str(amount).replace(" ", "").replace(",", ".")
     try:
-        return abs(float(amount_str))
+        return to_minor_units(float(amount_str))
     except ValueError:
-        return 0.0
+        return 0
 
 
 def parse_date(date_val) -> str:
@@ -158,7 +167,7 @@ def extract_sb1_credit(file_content: bytes, filename: str) -> List[ExtractedTran
         transactions.append(ExtractedTransaction(
             date=parse_date(row["Kjøpsdato"]),
             title=str(row["Beskrivelse"]).strip(),
-            amount=abs(float(row["Beløp"])),
+            amount=to_minor_units(abs(float(row["Beløp"]))),
             source="SB1 Credit",
             raw_data=row.to_json()
         ))
@@ -219,7 +228,7 @@ def extract_sb1_common(file_content: bytes, filename: str) -> List[ExtractedTran
         transactions.append(ExtractedTransaction(
             date=date_val,
             title=str(row["Beskrivelse"]).strip(),
-            amount=abs(float(row["Ut"])),
+            amount=to_minor_units(abs(float(row["Ut"]))),
             source="SB1 Common",
             isShared=True,
             raw_data=row.to_json()
@@ -281,11 +290,9 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> List[ExtractedTrans
         transactions.append(ExtractedTransaction(
             date=date_val,
             title=str(row["Beskrivelse"]).strip(),
-            amount=abs(float(row["Ut"])),
+            amount=to_minor_units(abs(float(row["Ut"]))),
             source="SB1 Debit",
             raw_data=row.to_json()
         ))
     
     return transactions
-
-

@@ -5,15 +5,29 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number, currency = 'SEK'): string {
+// Convert minor units (øre/cents) to major units (kr/dollars) for display
+export function fromMinorUnits(minorUnits: number | null | undefined): number {
+  if (minorUnits == null) return 0
+  return minorUnits / 100
+}
+
+// Convert major units to minor units for storage
+export function toMinorUnits(majorUnits: number): number {
+  return Math.round(majorUnits * 100)
+}
+
+// Format currency from minor units (divides by 100)
+export function formatCurrency(minorUnits: number, currency = 'SEK'): string {
+  const majorUnits = fromMinorUnits(minorUnits)
   return new Intl.NumberFormat('sv-SE', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+    maximumFractionDigits: 2,
+  }).format(majorUnits)
 }
 
+// Format raw number (no conversion) - useful for percentages or already converted values
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat('sv-SE').format(num)
 }
@@ -49,5 +63,3 @@ export function getMonthName(month: number): string {
   const date = new Date(2024, month - 1, 1)
   return date.toLocaleString('en-US', { month: 'long' })
 }
-
-

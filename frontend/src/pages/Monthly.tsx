@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Filter, ArrowUpRight, ArrowDownLeft, Check, HeartHandshakeIcon } from 'lucide-react'
-import { expensesApi, incomesApi, categoriesApi, Expense, Income, Category } from '@/lib/api'
-import { formatCurrency, formatDate, getYearMonth, parseYearMonth, getMonthName } from '@/lib/utils'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Filter, ArrowUpRight, ArrowDownLeft, Check } from 'lucide-react'
+import { expensesApi, incomesApi, categoriesApi, Expense } from '@/lib/api'
+import { formatCurrency, formatDate, getYearMonth, parseYearMonth, getMonthName, toMinorUnits, fromMinorUnits } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -35,7 +35,6 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from 'recharts'
 
 export function MonthlyPage() {
@@ -52,16 +51,16 @@ export function MonthlyPage() {
   const [showExpenseDialog, setShowExpenseDialog] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
-  // Form state for expense editing
+  // Form state for expense editing (amounts in major units for display)
   const [editForm, setEditForm] = useState({
     title: '',
     date: '',
-    amount: 0,
+    amount: 0, // Major units for display
     categoryId: '',
     notes: '',
     isShared: false,
-    collectToMe: 0,
-    collectFromMe: 0,
+    collectToMe: 0, // Major units for display
+    collectFromMe: 0, // Major units for display
     settled: false,
   })
 
@@ -71,7 +70,7 @@ export function MonthlyPage() {
     queryFn: () => expensesApi.getByMonth(currentYearMonth),
   })
 
-  const { data: incomes = [], isLoading: loadingIncomes } = useQuery({
+  const { data: incomes = [] } = useQuery({
     queryKey: ['incomes', currentYearMonth],
     queryFn: () => incomesApi.getByMonth(currentYearMonth),
   })
@@ -95,6 +94,10 @@ export function MonthlyPage() {
       setSelectedExpenses(new Set())
       toast({ title: 'Expenses updated' })
     },
+    onError: (error) => {
+      console.error('Bulk update error:', error)
+      toast({ title: 'Failed to update expenses', variant: 'destructive' })
+    },
   })
 
   const bulkDeleteMutation = useMutation({
@@ -104,6 +107,10 @@ export function MonthlyPage() {
       queryClient.invalidateQueries({ queryKey: ['expense-stats', currentYearMonth] })
       setSelectedExpenses(new Set())
       toast({ title: 'Expenses deleted' })
+    },
+    onError: (error) => {
+      console.error('Bulk delete error:', error)
+      toast({ title: 'Failed to delete expenses', variant: 'destructive' })
     },
   })
 
@@ -131,20 +138,26 @@ export function MonthlyPage() {
       queryClient.invalidateQueries({ queryKey: ['expenses', currentYearMonth] })
       queryClient.invalidateQueries({ queryKey: ['expense-stats', currentYearMonth] })
     },
+    onError: (error) => {
+      console.error('Update expense error:', error)
+      toast({ title: 'Failed to update expense', variant: 'destructive' })
+    },
   })
 
-  // Handler for editing an expense
+  // Handler for editing an expense (convert from minor to major units for display)
   const handleEditExpense = (expense: Expense) => {
     setEditingExpense(expense)
+    // Extract just the date part (YYYY-MM-DD) from ISO string
+    const dateStr = expense.date.split('T')[0]
     setEditForm({
       title: expense.title,
-      date: expense.date,
-      amount: Math.abs(expense.amount),
+      date: dateStr,
+      amount: fromMinorUnits(Math.abs(expense.amount)), // Convert to major units for display
       categoryId: expense.categoryId || '',
       notes: expense.notes || '',
       isShared: expense.isShared || false,
-      collectToMe: expense.collectToMe || 0,
-      collectFromMe: expense.collectFromMe || 0,
+      collectToMe: fromMinorUnits(expense.collectToMe || 0), // Convert to major units
+      collectFromMe: fromMinorUnits(expense.collectFromMe || 0), // Convert to major units
       settled: expense.settled,
     })
     setShowExpenseDialog(true)
@@ -153,28 +166,29 @@ export function MonthlyPage() {
   const handleSaveExpense = () => {
     if (!editingExpense) return
 
-    // Validate settlement amounts
+    // Validate settlement amounts (in major units)
     const totalSettlement = editForm.collectToMe + editForm.collectFromMe
     if (totalSettlement > editForm.amount) {
       toast({
         title: 'Invalid settlement amounts',
-        description: `Settlement total (${formatCurrency(totalSettlement)}) cannot exceed expense amount (${formatCurrency(editForm.amount)})`,
+        description: `Settlement total (${editForm.collectToMe + editForm.collectFromMe}) cannot exceed expense amount (${editForm.amount})`,
         variant: 'destructive',
       })
       return
     }
 
+    // Convert from major units to minor units for API
     updateExpenseMutation.mutate({
       id: editingExpense.id,
       data: {
         title: editForm.title,
         date: editForm.date,
-        amount: editForm.amount,
+        amount: toMinorUnits(editForm.amount),
         categoryId: editForm.categoryId || undefined,
         notes: editForm.notes || undefined,
         isShared: editForm.isShared,
-        collectToMe: editForm.collectToMe,
-        collectFromMe: editForm.collectFromMe,
+        collectToMe: toMinorUnits(editForm.collectToMe),
+        collectFromMe: toMinorUnits(editForm.collectFromMe),
         settled: editForm.settled,
       }
     }, {
@@ -186,7 +200,7 @@ export function MonthlyPage() {
     })
   }
 
-  // Calculate if settlement exceeds amount (for showing warning)
+  // Calculate if settlement exceeds amount (for showing warning) - in major units
   const settlementTotal = editForm.collectToMe + editForm.collectFromMe
   const settlementExceeds = settlementTotal > editForm.amount
 
@@ -262,17 +276,18 @@ export function MonthlyPage() {
   }
 
   // Calculate totals (shared expenses count as half - your portion from joint account)
+  // Amounts are in minor units from API
   const totalExpenses = expenses
     .filter(e => e.amount > 0)
     .reduce((sum, e) => {
       const amount = Math.abs(e.amount)
-      return sum + (e.isShared ? amount / 2 : amount)
+      return sum + (e.isShared ? Math.floor(amount / 2) : amount)
     }, 0)
 
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0)
   const balance = totalIncome - totalExpenses
 
-  // Pie chart data
+  // Pie chart data (amounts in minor units)
   const pieData = stats?.byCategory.filter(c => c.amount > 0).map(c => ({
     name: c.name,
     value: Math.abs(c.amount),
@@ -298,7 +313,7 @@ export function MonthlyPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Income</CardDescription>
@@ -331,14 +346,27 @@ export function MonthlyPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Settlement</CardDescription>
+            <CardDescription className="flex items-center gap-1">
+              <ArrowDownLeft className="h-3 w-3 text-emerald-500" />
+              They Owe You
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${(stats?.netSettlement ?? 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-              {(stats?.netSettlement ?? 0) >= 0 ? '+' : ''}{formatCurrency(stats?.netSettlement ?? 0)}
+            <div className="text-2xl font-bold text-emerald-500">
+              {formatCurrency(stats?.totalCollectToMe ?? 0)}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {(stats?.netSettlement ?? 0) >= 0 ? 'They owe you' : 'You owe them'}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1">
+              <ArrowUpRight className="h-3 w-3 text-rose-500" />
+              You Owe Them
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-500">
+              {formatCurrency(stats?.totalCollectFromMe ?? 0)}
             </div>
           </CardContent>
         </Card>
@@ -392,7 +420,12 @@ export function MonthlyPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleteMutation.isPending}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -446,7 +479,6 @@ export function MonthlyPage() {
                           <Check className="h-4 w-4 mx-auto" />
                         </th>
                         <th className="p-3 text-right text-sm font-medium text-muted-foreground">Amount</th>
-                        <th className="p-3 text-right text-sm font-medium text-muted-foreground">Notes</th>
                         <th className="p-3 w-10"></th>
                       </tr>
                     </thead>
@@ -556,9 +588,11 @@ export function MonthlyPage() {
                     e.preventDefault()
                     const form = e.target as HTMLFormElement
                     const formData = new FormData(form)
+                    // Convert from major units (user input) to minor units
+                    const amountMajor = parseFloat(formData.get('amount') as string)
                     createIncomeMutation.mutate({
                       yearMonth: currentYearMonth,
-                      amount: parseFloat(formData.get('amount') as string),
+                      amount: toMinorUnits(amountMajor),
                       source: formData.get('source') as string,
                       notes: formData.get('notes') as string || undefined,
                     })
@@ -573,7 +607,7 @@ export function MonthlyPage() {
                         <Input id="source" name="source" placeholder="e.g., Salary" required />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="amount">Amount</Label>
+                        <Label htmlFor="amount">Amount (kr)</Label>
                         <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
                       </div>
                       <div className="space-y-2">
@@ -651,6 +685,10 @@ export function MonthlyPage() {
                         backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
+                        color: 'hsl(var(--foreground))',
+                      }}
+                      labelStyle={{
+                        color: 'hsl(var(--foreground))',
                       }}
                     />
                   </PieChart>
@@ -712,12 +750,12 @@ export function MonthlyPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-amount">Amount</Label>
+                    <Label htmlFor="edit-amount">Amount (kr)</Label>
                     <Input
                       id="edit-amount"
                       type="number"
                       step="0.01"
-                      value={editForm.amount}
+                      value={editForm.amount || ''}
                       onChange={(e) => setEditForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
                       required
                     />
@@ -777,7 +815,7 @@ export function MonthlyPage() {
                   </div>
                   {editForm.isShared && (
                     <Badge variant="outline" className="text-muted-foreground">
-                      Your share: {formatCurrency(editForm.amount / 2)}
+                      Your share: {(editForm.amount / 2).toFixed(2)} kr
                     </Badge>
                   )}
                 </div>
@@ -790,7 +828,7 @@ export function MonthlyPage() {
                     <Label className="text-sm font-medium">Settlement</Label>
                     {settlementTotal > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        {formatCurrency(settlementTotal)} of {formatCurrency(editForm.amount)}
+                        {settlementTotal.toFixed(2)} of {editForm.amount.toFixed(2)} kr
                       </span>
                     )}
                   </div>
@@ -801,14 +839,13 @@ export function MonthlyPage() {
                     <div className="space-y-2">
                       <Label htmlFor="edit-collectToMe" className="text-xs flex items-center gap-1">
                         <ArrowDownLeft className="h-3 w-3 text-emerald-500" />
-                        They owe me
+                        They owe me (kr)
                       </Label>
                       <Input
                         id="edit-collectToMe"
                         type="number"
                         step="0.01"
                         min="0"
-                        max={editForm.amount}
                         placeholder="0.00"
                         value={editForm.collectToMe || ''}
                         onChange={(e) => setEditForm(f => ({ ...f, collectToMe: parseFloat(e.target.value) || 0 }))}
@@ -818,14 +855,13 @@ export function MonthlyPage() {
                     <div className="space-y-2">
                       <Label htmlFor="edit-collectFromMe" className="text-xs flex items-center gap-1">
                         <ArrowUpRight className="h-3 w-3 text-rose-500" />
-                        I owe them
+                        I owe them (kr)
                       </Label>
                       <Input
                         id="edit-collectFromMe"
                         type="number"
                         step="0.01"
                         min="0"
-                        max={editForm.amount}
                         placeholder="0.00"
                         value={editForm.collectFromMe || ''}
                         onChange={(e) => setEditForm(f => ({ ...f, collectFromMe: parseFloat(e.target.value) || 0 }))}
@@ -835,7 +871,7 @@ export function MonthlyPage() {
                   </div>
                   {settlementExceeds && (
                     <p className="text-xs text-rose-500">
-                      Settlement total ({formatCurrency(settlementTotal)}) exceeds expense amount ({formatCurrency(editForm.amount)})
+                      Settlement total ({settlementTotal.toFixed(2)}) exceeds expense amount ({editForm.amount.toFixed(2)})
                     </p>
                   )}
                   {settlementTotal > 0 && (
@@ -867,4 +903,3 @@ export function MonthlyPage() {
     </div>
   )
 }
-

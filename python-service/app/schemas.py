@@ -7,7 +7,7 @@ class ExtractedTransaction(BaseModel):
     """A single extracted transaction from a bank file"""
     date: str  # ISO format date string
     title: str
-    amount: float  # Positive for expenses
+    amount: int  # Amount in minor units (øre/cents), e.g., 1250 = 12.50 kr
     source: Optional[str] = None
     description: Optional[str] = None
     isShared: Optional[bool] = False
@@ -27,5 +27,3 @@ class ExtractorInfo(BaseModel):
     name: str
     description: str
     supported_formats: List[str]
-
-
