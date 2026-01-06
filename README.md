@@ -137,6 +137,23 @@ def extract_my_bank(file_content: bytes, filename: str) -> List[ExtractedTransac
 
 ## License
 
-MIT
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
+
+### You CAN:
+- ✅ Use for personal budgeting
+- ✅ Modify and customize for yourself
+- ✅ Share with attribution
+- ✅ Use for educational purposes
+- ✅ Use in non-profit organizations
+
+### You CANNOT:
+- ❌ Sell this software
+- ❌ Use in commercial products
+- ❌ Offer as a paid service
+- ❌ Remove attribution
+
+See [LICENSE](LICENSE) for full details.
+
+© 2025 Tobias Alldén — [github.com/alldentobias](https://github.com/alldentobias)
 
 
