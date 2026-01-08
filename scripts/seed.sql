@@ -40,3 +40,4 @@ INSERT INTO loans (user_id, name, principal, current_balance, interest_rate, own
 ON CONFLICT DO NOTHING;
 
 
+

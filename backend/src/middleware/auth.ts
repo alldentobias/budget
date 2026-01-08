@@ -15,7 +15,7 @@ async function getKey() {
     keyData,
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign", "verify"]
+    ["sign", "verify"],
   );
 }
 
@@ -34,7 +34,7 @@ export async function authMiddleware(c: Context, next: Next) {
   try {
     // Try to get token from cookie first, then Authorization header
     let token = getCookie(c, "auth_token");
-    
+
     if (!token) {
       const authHeader = c.req.header("Authorization");
       if (authHeader?.startsWith("Bearer ")) {
@@ -48,7 +48,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     const key = await getKey();
     const payload = await verify(token, key);
-    
+
     if (!payload.sub) {
       return c.json({ message: "Invalid token" }, 401);
     }
@@ -73,15 +73,13 @@ export async function authMiddleware(c: Context, next: Next) {
 export async function createToken(userId: string): Promise<string> {
   const key = await getKey();
   const { create } = await import("djwt");
-  
+
   return await create(
     { alg: "HS256", typ: "JWT" },
-    { 
+    {
       sub: userId,
       exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7), // 7 days
     },
-    key
+    key,
   );
 }
-
-

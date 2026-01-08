@@ -95,3 +95,4 @@ echo ""
 echo "🔐 Secrets stored in $APP_DIR/.env"
 echo "💾 Backups will be in $APP_DIR/backups/ (daily, kept 7 days)"
 
+

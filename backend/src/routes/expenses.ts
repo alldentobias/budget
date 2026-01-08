@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { db, expenses, categories } from "../db/index.ts";
-import { eq, and, sql } from "drizzle-orm";
+import { categories, db, expenses } from "../db/index.ts";
+import { and, eq, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const expensesRoutes = new Hono();
@@ -26,7 +26,7 @@ const expenseSchema = z.object({
 expensesRoutes.get("/", async (c) => {
   const user = c.get("user");
   const yearMonth = parseInt(c.req.query("yearMonth") || "0");
-  
+
   if (!yearMonth) {
     return c.json({ message: "yearMonth is required" }, 400);
   }
@@ -47,7 +47,7 @@ expensesRoutes.get("/", async (c) => {
 expensesRoutes.get("/stats", async (c) => {
   const user = c.get("user");
   const yearMonth = parseInt(c.req.query("yearMonth") || "0");
-  
+
   if (!yearMonth) {
     return c.json({ message: "yearMonth is required" }, 400);
   }
@@ -65,36 +65,40 @@ expensesRoutes.get("/stats", async (c) => {
     const amount = e.amount;
     return sum + (e.isShared ? Math.floor(amount / 2) : amount);
   }, 0);
-  
+
   // Calculate settlement totals (amounts in minor units)
   // Return separate totals for UI display
   const totalCollectToMe = userExpenses
-    .filter(e => e.collectToMe > 0 && !e.settled)
+    .filter((e) => e.collectToMe > 0 && !e.settled)
     .reduce((sum, e) => sum + e.collectToMe, 0);
-  
+
   const totalCollectFromMe = userExpenses
-    .filter(e => e.collectFromMe > 0 && !e.settled)
+    .filter((e) => e.collectFromMe > 0 && !e.settled)
     .reduce((sum, e) => sum + e.collectFromMe, 0);
 
   const settledToMe = userExpenses
-    .filter(e => e.collectToMe > 0 && e.settled)
+    .filter((e) => e.collectToMe > 0 && e.settled)
     .reduce((sum, e) => sum + e.collectToMe, 0);
 
   const settledFromMe = userExpenses
-    .filter(e => e.collectFromMe > 0 && e.settled)
+    .filter((e) => e.collectFromMe > 0 && e.settled)
     .reduce((sum, e) => sum + e.collectFromMe, 0);
 
   // Group by category (shared expenses count as half)
-  const byCategory = new Map<string, { name: string; color: string; amount: number; count: number }>();
-  
+  const byCategory = new Map<
+    string,
+    { name: string; color: string; amount: number; count: number }
+  >();
+
   for (const expense of userExpenses) {
     const catId = expense.categoryId || "uncategorized";
     const catName = expense.category?.name || "Uncategorized";
     const catColor = expense.category?.color || "#6b7280";
     const amount = expense.amount;
     const effectiveAmount = expense.isShared ? Math.floor(amount / 2) : amount;
-    
-    const existing = byCategory.get(catId) || { name: catName, color: catColor, amount: 0, count: 0 };
+
+    const existing = byCategory.get(catId) ||
+      { name: catName, color: catColor, amount: 0, count: 0 };
     existing.amount += effectiveAmount;
     existing.count += 1;
     byCategory.set(catId, existing);
@@ -103,8 +107,8 @@ expensesRoutes.get("/stats", async (c) => {
   return c.json({
     total,
     count: userExpenses.length,
-    totalCollectToMe,       // Renamed: total amount others owe you
-    totalCollectFromMe,     // Renamed: total amount you owe others
+    totalCollectToMe, // Renamed: total amount others owe you
+    totalCollectFromMe, // Renamed: total amount you owe others
     settledToMe,
     settledFromMe,
     netSettlement: totalCollectToMe - totalCollectFromMe, // Positive means they owe you
@@ -156,6 +160,60 @@ expensesRoutes.post("/", async (c) => {
   }
 });
 
+// Bulk update expenses (must be before /:id to avoid route conflict)
+expensesRoutes.put("/bulk", async (c) => {
+  try {
+    const user = c.get("user");
+    const body = await c.req.json();
+    const { updates } = z.object({
+      updates: z.array(z.object({
+        id: z.string().uuid(),
+        categoryId: z.string().uuid().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        isShared: z.boolean().optional(),
+        collectToMe: z.number().int().optional(),
+        collectFromMe: z.number().int().optional(),
+        settled: z.boolean().optional(),
+      })),
+    }).parse(body);
+
+    const results = [];
+
+    for (const update of updates) {
+      const [updated] = await db
+        .update(expenses)
+        .set({
+          categoryId: update.categoryId !== undefined
+            ? (update.categoryId || null)
+            : undefined,
+          notes: update.notes,
+          isShared: update.isShared,
+          collectToMe: update.collectToMe,
+          collectFromMe: update.collectFromMe,
+          settled: update.settled,
+        })
+        .where(and(eq(expenses.id, update.id), eq(expenses.userId, user.id)))
+        .returning();
+
+      if (updated) {
+        const result = await db.query.expenses.findFirst({
+          where: eq(expenses.id, updated.id),
+          with: { category: true },
+        });
+        results.push(result);
+      }
+    }
+
+    return c.json(results);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ message: "Invalid input", errors: error.errors }, 400);
+    }
+    console.error("Bulk update error:", error);
+    return c.json({ message: "Failed to update expenses" }, 500);
+  }
+});
+
 // Update an expense
 expensesRoutes.put("/:id", async (c) => {
   try {
@@ -167,7 +225,9 @@ expensesRoutes.put("/:id", async (c) => {
     const [updated] = await db
       .update(expenses)
       .set({
-        categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
+        categoryId: data.categoryId !== undefined
+          ? (data.categoryId || null)
+          : undefined,
         date: data.date,
         amount: data.amount,
         title: data.title,
@@ -202,76 +262,7 @@ expensesRoutes.put("/:id", async (c) => {
   }
 });
 
-// Bulk update expenses
-expensesRoutes.put("/bulk", async (c) => {
-  try {
-    const user = c.get("user");
-    const body = await c.req.json();
-    const { updates } = z.object({
-      updates: z.array(z.object({
-        id: z.string().uuid(),
-        categoryId: z.string().uuid().optional().nullable(),
-        notes: z.string().optional().nullable(),
-        isShared: z.boolean().optional(),
-        collectToMe: z.number().int().optional(),
-        collectFromMe: z.number().int().optional(),
-        settled: z.boolean().optional(),
-      })),
-    }).parse(body);
-
-    const results = [];
-
-    for (const update of updates) {
-      const [updated] = await db
-        .update(expenses)
-        .set({
-          categoryId: update.categoryId !== undefined ? (update.categoryId || null) : undefined,
-          notes: update.notes,
-          isShared: update.isShared,
-          collectToMe: update.collectToMe,
-          collectFromMe: update.collectFromMe,
-          settled: update.settled,
-        })
-        .where(and(eq(expenses.id, update.id), eq(expenses.userId, user.id)))
-        .returning();
-
-      if (updated) {
-        const result = await db.query.expenses.findFirst({
-          where: eq(expenses.id, updated.id),
-          with: { category: true },
-        });
-        results.push(result);
-      }
-    }
-
-    return c.json(results);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ message: "Invalid input", errors: error.errors }, 400);
-    }
-    console.error("Bulk update error:", error);
-    return c.json({ message: "Failed to update expenses" }, 500);
-  }
-});
-
-// Delete an expense
-expensesRoutes.delete("/:id", async (c) => {
-  const user = c.get("user");
-  const expenseId = c.req.param("id");
-
-  const deleted = await db
-    .delete(expenses)
-    .where(and(eq(expenses.id, expenseId), eq(expenses.userId, user.id)))
-    .returning();
-
-  if (deleted.length === 0) {
-    return c.json({ message: "Expense not found" }, 404);
-  }
-
-  return c.body(null, 204);
-});
-
-// Bulk delete expenses
+// Bulk delete expenses (must be before /:id to avoid route conflict)
 expensesRoutes.delete("/bulk", async (c) => {
   try {
     const user = c.get("user");
@@ -297,6 +288,23 @@ expensesRoutes.delete("/bulk", async (c) => {
     console.error("Bulk delete error:", error);
     return c.json({ message: "Failed to delete expenses" }, 500);
   }
+});
+
+// Delete an expense
+expensesRoutes.delete("/:id", async (c) => {
+  const user = c.get("user");
+  const expenseId = c.req.param("id");
+
+  const deleted = await db
+    .delete(expenses)
+    .where(and(eq(expenses.id, expenseId), eq(expenses.userId, user.id)))
+    .returning();
+
+  if (deleted.length === 0) {
+    return c.json({ message: "Expense not found" }, 404);
+  }
+
+  return c.body(null, 204);
 });
 
 export { expensesRoutes };

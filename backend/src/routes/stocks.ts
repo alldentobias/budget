@@ -9,10 +9,10 @@ stocksRoutes.use("*", authMiddleware);
 // Get quote for a single ticker
 stocksRoutes.get("/quote/:ticker", async (c) => {
   const ticker = c.req.param("ticker");
-  
+
   try {
     const quote = await yahooFinance.quote(ticker);
-    
+
     return c.json({
       ticker: quote.symbol,
       price: quote.regularMarketPrice || 0,
@@ -74,5 +74,3 @@ stocksRoutes.post("/quotes", async (c) => {
 });
 
 export { stocksRoutes };
-
-

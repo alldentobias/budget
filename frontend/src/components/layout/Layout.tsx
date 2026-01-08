@@ -1,38 +1,38 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard,
   Calendar,
-  Upload,
-  Wallet,
-  Settings,
+  LayoutDashboard,
   LogOut,
   Menu,
+  Settings,
+  Upload,
+  Wallet,
   X,
-} from 'lucide-react'
-import { useState } from 'react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/lib/auth'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
+} from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/monthly', icon: Calendar, label: 'Monthly' },
-  { to: '/import', icon: Upload, label: 'Import' },
-  { to: '/assets', icon: Wallet, label: 'Assets & Loans' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-]
+  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/monthly", icon: Calendar, label: "Monthly" },
+  { to: "/import", icon: Upload, label: "Import" },
+  { to: "/assets", icon: Wallet, label: "Assets & Loans" },
+  { to: "/settings", icon: Settings, label: "Settings" },
+];
 
 export function Layout() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
-    await logout()
-    navigate('/login')
-  }
+    await logout();
+    navigate("/login");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,7 +49,9 @@ export function Layout() {
           size="icon"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
-          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {sidebarOpen
+            ? <X className="h-5 w-5" />
+            : <Menu className="h-5 w-5" />}
         </Button>
       </header>
 
@@ -57,7 +59,7 @@ export function Layout() {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex flex-col h-full">
@@ -79,16 +81,15 @@ export function Layout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === '/'}
+                  end={item.to === "/"}
                   onClick={() => setSidebarOpen(false)}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                       isActive
                         ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )
-                  }
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
                 >
                   <item.icon className="h-5 w-5" />
                   {item.label}
@@ -139,7 +140,5 @@ export function Layout() {
         </div>
       </main>
     </div>
-  )
+  );
 }
-
-

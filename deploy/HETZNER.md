@@ -287,3 +287,4 @@ docker compose -f docker-compose.hetzner.yml logs postgres
 - [ ] Regular system updates scheduled
 - [ ] Verified backups are working
 
+

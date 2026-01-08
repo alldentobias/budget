@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, loans } from "../db/index.ts";
-import { eq, and } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const loansRoutes = new Hono();
@@ -21,7 +21,7 @@ const loanSchema = z.object({
 // Get all loans for the current user
 loansRoutes.get("/", async (c) => {
   const user = c.get("user");
-  
+
   const userLoans = await db.query.loans.findMany({
     where: eq(loans.userId, user.id),
     orderBy: (loans, { desc }) => [desc(loans.createdAt)],

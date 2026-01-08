@@ -83,9 +83,13 @@ importRoutes.post("/upload", async (c) => {
         ));
     }
 
-    // Get existing expenses to check for duplicates
+    // Get existing expenses for the target month to check for duplicates
+    const yearMonthToCheck = targetYearMonth || dateToYearMonth(transactions[0]?.date || new Date().toISOString());
     const existingExpenses = await db.query.expenses.findMany({
-      where: eq(expenses.userId, user.id),
+      where: and(
+        eq(expenses.userId, user.id),
+        eq(expenses.yearMonth, yearMonthToCheck),
+      ),
     });
 
     let duplicateCount = 0;
@@ -98,13 +102,16 @@ importRoutes.post("/upload", async (c) => {
 
       // Amount is now in minor units (integer) from Python service
       const amount = tx.amount;
+      const title = tx.title?.trim();
+      const source = tx.source || null;
 
-      // Check for duplicates (same title, date, and amount - exact integer comparison)
+      // Check for duplicates: same month, amount, title, and source
       const duplicate = existingExpenses.find(
         (e) =>
-          e.title === tx.title &&
-          e.date === tx.date &&
-          e.amount === amount,
+          e.yearMonth === yearMonth &&
+          e.amount === amount &&
+          e.title?.trim() === title &&
+          (e.source || null) === source,
       );
 
       const isDuplicate = !!duplicate;

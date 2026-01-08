@@ -1,49 +1,51 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from '@/components/ui/toaster'
-import { AuthProvider, useAuth } from '@/lib/auth'
-import { Layout } from '@/components/layout/Layout'
-import { LoginPage } from '@/pages/Login'
-import { RegisterPage } from '@/pages/Register'
-import { DashboardPage } from '@/pages/Dashboard'
-import { MonthlyPage } from '@/pages/Monthly'
-import { ImportPage } from '@/pages/Import'
-import { AssetsPage } from '@/pages/Assets'
-import { SettingsPage } from '@/pages/Settings'
+import { Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { Layout } from "@/components/layout/Layout";
+import { LoginPage } from "@/pages/Login";
+import { RegisterPage } from "@/pages/Register";
+import { DashboardPage } from "@/pages/Dashboard";
+import { MonthlyPage } from "@/pages/Monthly";
+import { ImportPage } from "@/pages/Import";
+import { AssetsPage } from "@/pages/Assets";
+import { SettingsPage } from "@/pages/Settings";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
-  
+  const { user, isLoading } = useAuth();
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary">
+        </div>
       </div>
-    )
+    );
   }
-  
+
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
-  
-  return <>{children}</>
+
+  return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
-  
+  const { user, isLoading } = useAuth();
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary">
+        </div>
       </div>
-    )
+    );
   }
-  
+
   if (user) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/" replace />;
   }
-  
-  return <>{children}</>
+
+  return <>{children}</>;
 }
 
 function AppRoutes() {
@@ -81,7 +83,7 @@ function AppRoutes() {
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
-  )
+  );
 }
 
 export default function App() {
@@ -90,7 +92,5 @@ export default function App() {
       <AppRoutes />
       <Toaster />
     </AuthProvider>
-  )
+  );
 }
-
-

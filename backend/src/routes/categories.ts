@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { db, categories } from "../db/index.ts";
-import { eq, and } from "drizzle-orm";
+import { categories, db } from "../db/index.ts";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const categoriesRoutes = new Hono();
@@ -15,7 +15,7 @@ const categorySchema = z.object({
 // Get all categories for the current user
 categoriesRoutes.get("/", async (c) => {
   const user = c.get("user");
-  
+
   const userCategories = await db.query.categories.findMany({
     where: eq(categories.userId, user.id),
     orderBy: (categories, { asc }) => [asc(categories.name)],
@@ -105,5 +105,3 @@ categoriesRoutes.delete("/:id", async (c) => {
 });
 
 export { categoriesRoutes };
-
-

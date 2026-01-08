@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, incomes } from "../db/index.ts";
-import { eq, and } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const incomesRoutes = new Hono();
@@ -19,7 +19,7 @@ const incomeSchema = z.object({
 incomesRoutes.get("/", async (c) => {
   const user = c.get("user");
   const yearMonth = parseInt(c.req.query("yearMonth") || "0");
-  
+
   if (!yearMonth) {
     return c.json({ message: "yearMonth is required" }, 400);
   }

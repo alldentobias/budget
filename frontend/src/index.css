@@ -82,7 +82,7 @@
 }
 
 .card-glow::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: -1px;
   background: linear-gradient(135deg, hsl(var(--primary) / 0.2), transparent);
@@ -95,5 +95,3 @@
 .card-glow:hover::before {
   opacity: 1;
 }
-
-

@@ -1,6 +1,10 @@
 """
 Tests for bank data extractors.
 Tests CSV/Excel parsing for Norwegian bank formats.
+
+All amounts are tested in minor units (øre/cents):
+  - 12.50 kr -> 1250
+  - 100.00 kr -> 10000
 """
 import pytest
 import io
@@ -22,19 +26,19 @@ class TestHelperFunctions:
     """Test helper functions for parsing"""
     
     def test_parse_norwegian_amount_float(self):
-        """Test parsing a regular float"""
-        assert parse_norwegian_amount(123.45) == 123.45
-        assert parse_norwegian_amount(-123.45) == 123.45  # Returns absolute value
+        """Test parsing a regular float - returns minor units (int)"""
+        assert parse_norwegian_amount(123.45) == 12345  # 123.45 kr -> 12345 øre
+        assert parse_norwegian_amount(-123.45) == 12345  # Returns absolute value
     
     def test_parse_norwegian_amount_string_comma_decimal(self):
         """Test parsing Norwegian format with comma as decimal separator"""
-        assert parse_norwegian_amount("123,45") == 123.45
-        assert parse_norwegian_amount("1 234,56") == 1234.56
+        assert parse_norwegian_amount("123,45") == 12345  # 123.45 kr -> 12345 øre
+        assert parse_norwegian_amount("1 234,56") == 123456  # 1234.56 kr -> 123456 øre
     
     def test_parse_norwegian_amount_nan(self):
         """Test parsing NaN returns 0"""
-        assert parse_norwegian_amount(pd.NA) == 0.0
-        assert parse_norwegian_amount(float('nan')) == 0.0
+        assert parse_norwegian_amount(pd.NA) == 0
+        assert parse_norwegian_amount(float('nan')) == 0
     
     def test_parse_date_iso_format(self):
         """Test parsing ISO date format"""
@@ -64,8 +68,8 @@ class TestDNBMastercard:
     def test_extract_basic_transactions(self):
         """Test extracting basic DNB transactions"""
         data = [
-            {"Dato": "2025-01-15", "Beløpet gjelder": "Coffee Shop", "Inn": None, "Ut": 45.00},
-            {"Dato": "2025-01-16", "Beløpet gjelder": "Grocery Store", "Inn": None, "Ut": 250.50},
+            {"Dato": "2025-01-15", "Beløpet gjelder": "Coffee Shop", "Valuta": "NOK", "Inn": None, "Ut": 45.00},
+            {"Dato": "2025-01-16", "Beløpet gjelder": "Grocery Store", "Valuta": "NOK", "Inn": None, "Ut": 250.50},
         ]
         file_content = self.create_sample_excel(data)
         
@@ -73,12 +77,12 @@ class TestDNBMastercard:
         
         assert len(transactions) == 2
         assert transactions[0].title == "Coffee Shop"
-        assert transactions[0].amount == 45.00
+        assert transactions[0].amount == 4500  # 45.00 kr -> 4500 øre
         assert transactions[0].source == "DNB Credit"
         assert transactions[0].date == "2025-01-15"
         
         assert transactions[1].title == "Grocery Store"
-        assert transactions[1].amount == 250.50
+        assert transactions[1].amount == 25050  # 250.50 kr -> 25050 øre
     
     def test_filters_incoming_transactions(self):
         """Test that incoming transactions (refunds) are filtered out"""
@@ -120,8 +124,8 @@ class TestAmexNorway:
     def test_extract_basic_transactions(self):
         """Test extracting basic Amex transactions"""
         data = [
-            {"Dato": "2025-01-15", "Beskrivelse": "Restaurant ABC", "Beløp": 450.00},
-            {"Dato": "2025-01-16", "Beskrivelse": "Online Store", "Beløp": 199.90},
+            {"Dato": "2025-01-15", "Beskrivelse": "Restaurant ABC", "Kortmedlem": "John Doe", "Kontonummer": "1234", "Beløp": 450.00, "Utvidede detaljer": "N/A", "Opptrer på din kontoutskrift som": "Memes", "Adresse": "MemeStreet 1", "Postnummer": 1234, "Land": "Norge", "Referance": "ABC"},
+            {"Dato": "2025-01-16", "Beskrivelse": "Online Store", "Kortmedlem": "John Doe", "Kontonummer": "1234", "Beløp": 199.90, "Utvidede detaljer": "N/A", "Opptrer på din kontoutskrift som": "Memes", "Adresse": "MemeStreet 1", "Postnummer": 1234, "Land": "Norge", "Referance": "ABC"},
         ]
         file_content = self.create_sample_excel_with_header(data)
         
@@ -129,11 +133,11 @@ class TestAmexNorway:
         
         assert len(transactions) == 2
         assert transactions[0].title == "Restaurant ABC"
-        assert transactions[0].amount == 450.00
+        assert transactions[0].amount == 45000  # 450.00 kr -> 45000 øre
         assert transactions[0].source == "Amex"
         
         assert transactions[1].title == "Online Store"
-        assert transactions[1].amount == 199.90
+        assert transactions[1].amount == 19990  # 199.90 kr -> 19990 øre
 
 
 class TestSB1Credit:
@@ -141,7 +145,7 @@ class TestSB1Credit:
     
     def create_sample_csv(self, rows: list[list], encoding='utf-8') -> bytes:
         """Create a sample CSV with semicolon separator"""
-        header = "Kjøpsdato;Beskrivelse;Beløp"
+        header = "Kjøpsdato;Posteringsdato;Beskrivelse;Beløp"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
         content = "\n".join(lines)
         return content.encode(encoding)
@@ -149,8 +153,8 @@ class TestSB1Credit:
     def test_extract_basic_transactions(self):
         """Test extracting basic SB1 credit transactions"""
         rows = [
-            ["2025-01-15", "Coffee Shop", "-45,50"],
-            ["2025-01-16", "Supermarket", "-320,00"],
+            ["2025-01-15", "2025-01-16", "Coffee Shop", "-45,50"],
+            ["2025-01-16", "2025-01-17", "Supermarket", "-320,00"],
         ]
         file_content = self.create_sample_csv(rows)
         
@@ -158,17 +162,17 @@ class TestSB1Credit:
         
         assert len(transactions) == 2
         assert transactions[0].title == "Coffee Shop"
-        assert transactions[0].amount == 45.50
+        assert transactions[0].amount == 4550  # 45.50 kr -> 4550 øre
         assert transactions[0].source == "SB1 Credit"
         
         assert transactions[1].title == "Supermarket"
-        assert transactions[1].amount == 320.00
+        assert transactions[1].amount == 32000  # 320.00 kr -> 32000 øre
     
     def test_filters_positive_amounts(self):
         """Test that positive amounts (refunds) are filtered out"""
         rows = [
-            ["2025-01-15", "Purchase", "-100,00"],
-            ["2025-01-16", "Refund", "50,00"],
+            ["2025-01-15", "2025-01-16", "Purchase", "-100,00"],
+            ["2025-01-16", "2025-01-17", "Refund", "50,00"],
         ]
         file_content = self.create_sample_csv(rows)
         
@@ -180,7 +184,7 @@ class TestSB1Credit:
     def test_handles_latin1_encoding(self):
         """Test that Latin-1 encoded files are handled"""
         rows = [
-            ["2025-01-15", "Café Nørdik", "-89,00"],
+            ["2025-01-15", "2025-01-16", "Café Nørdik", "-89,00"],
         ]
         file_content = self.create_sample_csv(rows, encoding='latin-1')
         
@@ -212,12 +216,12 @@ class TestSB1Common:
         
         assert len(transactions) == 2
         assert transactions[0].title == "Rent Payment"
-        assert transactions[0].amount == 8500.00
+        assert transactions[0].amount == 850000  # 8500.00 kr -> 850000 øre
         assert transactions[0].source == "SB1 Common"
         assert transactions[0].isShared == True  # Common account expenses are shared
         
         assert transactions[1].title == "Utilities"
-        assert transactions[1].amount == 450.00
+        assert transactions[1].amount == 45000  # 450.00 kr -> 45000 øre
     
     def test_parses_norwegian_date_format(self):
         """Test that Norwegian date format (DD.MM.YYYY) is parsed correctly"""
@@ -249,7 +253,7 @@ class TestSB1Debit:
     
     def create_sample_csv(self, rows: list[list]) -> bytes:
         """Create a sample CSV with semicolon separator"""
-        header = "Dato;Beskrivelse;Ut"
+        header = "Dato;Posteringsdato;Beskrivelse;Ut"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
         content = "\n".join(lines)
         return content.encode('utf-8')
@@ -257,8 +261,8 @@ class TestSB1Debit:
     def test_extract_basic_transactions(self):
         """Test extracting basic SB1 debit transactions"""
         rows = [
-            ["15.01.2025", "ATM Withdrawal", "-500,00"],
-            ["16.01.2025", "Card Payment", "-125,50"],
+            ["15.01.2025", "16.01.2025", "ATM Withdrawal", "-500,00"],
+            ["16.01.2025", "17.01.2025", "Card Payment", "-125,50"],
         ]
         file_content = self.create_sample_csv(rows)
         
@@ -266,12 +270,12 @@ class TestSB1Debit:
         
         assert len(transactions) == 2
         assert transactions[0].title == "ATM Withdrawal"
-        assert transactions[0].amount == 500.00
+        assert transactions[0].amount == 50000  # 500.00 kr -> 50000 øre
         assert transactions[0].source == "SB1 Debit"
         assert transactions[0].isShared == False  # Debit is not shared by default
         
         assert transactions[1].title == "Card Payment"
-        assert transactions[1].amount == 125.50
+        assert transactions[1].amount == 12550  # 125.50 kr -> 12550 øre
 
 
 class TestExportCSVFormat:
@@ -281,9 +285,9 @@ class TestExportCSVFormat:
         """Test that data maintains integrity through extract cycle"""
         # Create sample SB1 debit data
         rows = [
-            ["15.01.2025", "Test Transaction", "-999,99"],
+            ["15.01.2025", "16.01.2025", "Test Transaction", "-999,99"],
         ]
-        header = "Dato;Beskrivelse;Ut"
+        header = "Dato;PosteringsDato;Beskrivelse;Ut"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
         content = "\n".join(lines).encode('utf-8')
         
@@ -295,10 +299,9 @@ class TestExportCSVFormat:
         t = transactions[0]
         assert t.date == "2025-01-15"
         assert t.title == "Test Transaction"
-        assert t.amount == 999.99
+        assert t.amount == 99999  # 999.99 kr -> 99999 øre
         assert t.source == "SB1 Debit"
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

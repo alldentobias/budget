@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { db, assets } from "../db/index.ts";
-import { eq, and } from "drizzle-orm";
+import { assets, db } from "../db/index.ts";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 import yahooFinance from "yahoo-finance2";
 
@@ -28,7 +28,7 @@ function priceToMinorUnits(price: number | null | undefined): number | null {
 // Get all assets for the current user
 assetsRoutes.get("/", async (c) => {
   const user = c.get("user");
-  
+
   const userAssets = await db.query.assets.findMany({
     where: eq(assets.userId, user.id),
     orderBy: (assets, { desc }) => [desc(assets.createdAt)],
@@ -110,7 +110,7 @@ assetsRoutes.put("/:id", async (c) => {
     // If ticker changed, fetch new price
     let currentPrice = existing.currentPrice;
     let lastPriceUpdate = existing.lastPriceUpdate;
-    
+
     if (data.ticker && data.ticker !== existing.ticker) {
       try {
         const quote = await yahooFinance.quote(data.ticker);
@@ -126,11 +126,19 @@ assetsRoutes.put("/:id", async (c) => {
       .set({
         type: data.type,
         name: data.name,
-        ticker: data.ticker !== undefined ? (data.ticker || null) : existing.ticker,
-        quantity: data.quantity !== undefined ? data.quantity.toString() : existing.quantity,
-        manualValue: data.manualValue !== undefined ? data.manualValue : existing.manualValue,
+        ticker: data.ticker !== undefined
+          ? (data.ticker || null)
+          : existing.ticker,
+        quantity: data.quantity !== undefined
+          ? data.quantity.toString()
+          : existing.quantity,
+        manualValue: data.manualValue !== undefined
+          ? data.manualValue
+          : existing.manualValue,
         currentPrice,
-        ownershipPct: data.ownershipPct !== undefined ? data.ownershipPct.toString() : existing.ownershipPct,
+        ownershipPct: data.ownershipPct !== undefined
+          ? data.ownershipPct.toString()
+          : existing.ownershipPct,
         lastPriceUpdate,
       })
       .where(and(eq(assets.id, assetId), eq(assets.userId, user.id)))
@@ -170,16 +178,16 @@ assetsRoutes.delete("/:id", async (c) => {
 // Refresh stock prices
 assetsRoutes.post("/refresh-prices", async (c) => {
   const user = c.get("user");
-  
+
   const userAssets = await db.query.assets.findMany({
     where: and(eq(assets.userId, user.id), eq(assets.type, "stock")),
   });
 
   const stockAssets = userAssets.filter((a) => a.ticker);
-  
+
   for (const asset of stockAssets) {
     if (!asset.ticker) continue;
-    
+
     try {
       const quote = await yahooFinance.quote(asset.ticker);
       await db

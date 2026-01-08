@@ -1,93 +1,29 @@
 # Budget App Deployment Guide
 
-## Option 1: Free Cloud Hosting (Recommended for simplicity)
+## Option 1: European Cloud VPS (Recommended)
 
-### A. Fly.io + Neon PostgreSQL (~$0/month)
+Best for privacy, GDPR compliance, and avoiding US cloud providers.
 
-**Setup Neon Database (Free):**
-1. Create account at [neon.tech](https://neon.tech)
-2. Create a new project
-3. Copy the connection string: `postgres://user:pass@ep-xxx.eu-central-1.aws.neon.tech/budget`
+### Hetzner Cloud (Best Value) - €3.79/month
 
-**Deploy to Fly.io:**
+| Server | Specs | Price |
+|--------|-------|-------|
+| **CX22** | 2 vCPU, 4GB RAM, 40GB SSD | €3.79/month |
+| **CX32** | 4 vCPU, 8GB RAM, 80GB SSD | €7.59/month |
+
+**Quick Setup:**
+
 ```bash
-# Install Fly CLI
-curl -L https://fly.io/install.sh | sh
+# 1. Create CX22 server at hetzner.cloud (€3.79/month)
+# 2. Point your domain to the server IP
+# 3. SSH in and run the setup script:
 
-# Login
-fly auth login
-
-# Launch (first time)
-fly launch --no-deploy
-
-# Set secrets
-fly secrets set DATABASE_URL="postgres://user:pass@ep-xxx.neon.tech/budget"
-fly secrets set JWT_SECRET="your-secure-secret-key-min-32-chars"
-
-# Deploy
-fly deploy --dockerfile Dockerfile.fly
-
-# Open app
-fly open
+curl -fsSL https://raw.githubusercontent.com/yourusername/budget/main/deploy/hetzner-setup.sh | bash
 ```
 
-**Estimated cost:** $0/month (within free tier)
-
----
-
-### B. Railway (~$5/month)
-
-Railway offers a simpler deployment with built-in PostgreSQL.
+**Manual Setup:**
 
 ```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login
-railway login
-
-# Initialize
-railway init
-
-# Add PostgreSQL
-railway add --plugin postgresql
-
-# Deploy
-railway up
-```
-
-**Estimated cost:** ~$5/month (usage-based)
-
----
-
-### C. Render + Supabase (~$0-7/month)
-
-1. **Database:** Create free Supabase project at [supabase.com](https://supabase.com)
-2. **Backend:** Deploy as Web Service on [render.com](https://render.com)
-3. **Frontend:** Deploy on Vercel or Cloudflare Pages (free)
-
----
-
-## Option 2: Cheap VPS (~$4-6/month)
-
-Best for more control and reliability.
-
-### Recommended Providers:
-
-| Provider | Specs | Price |
-|----------|-------|-------|
-| **Hetzner Cloud** | 2 vCPU, 2GB RAM, 20GB SSD | €3.79/month (~$4) |
-| **Netcup** | 2 vCPU, 2GB RAM, 40GB SSD | €2.99/month (~$3.20) |
-| **DigitalOcean** | 1 vCPU, 1GB RAM, 25GB SSD | $6/month |
-| **Vultr** | 1 vCPU, 1GB RAM, 25GB SSD | $5/month |
-| **Linode** | 1 vCPU, 1GB RAM, 25GB SSD | $5/month |
-
-### VPS Setup Script:
-
-```bash
-#!/bin/bash
-# Run on fresh Ubuntu 22.04 VPS
-
 # Update system
 apt update && apt upgrade -y
 
@@ -95,40 +31,47 @@ apt update && apt upgrade -y
 curl -fsSL https://get.docker.com | sh
 usermod -aG docker $USER
 
-# Install Docker Compose
-apt install -y docker-compose-plugin
-
-# Clone your repo
+# Clone repo
 git clone https://github.com/yourusername/budget.git /opt/budget
 cd /opt/budget
 
-# Create environment file
-cat > .env << 'EOF'
-DATABASE_URL=postgres://budget:your_secure_password@postgres:5432/budget
-JWT_SECRET=your-very-secure-secret-key-at-least-32-characters
-POSTGRES_PASSWORD=your_secure_password
+# Generate secrets and create .env
+cat > .env << EOF
+DATABASE_URL=postgres://budget:$(openssl rand -hex 16)@postgres:5432/budget
+JWT_SECRET=$(openssl rand -hex 32)
+POSTGRES_PASSWORD=$(openssl rand -hex 16)
 EOF
 
 # Start services
-docker compose up -d
-
-# Setup automatic SSL with Caddy (optional)
-apt install -y caddy
-cat > /etc/caddy/Caddyfile << 'EOF'
-budget.yourdomain.com {
-    reverse_proxy localhost:5173
-    
-    handle /api/* {
-        reverse_proxy localhost:8000
-    }
-}
-EOF
-systemctl restart caddy
+docker compose -f docker-compose.prod.yml up -d
 ```
+
+See `deploy/HETZNER.md` for detailed instructions including SSL setup with Caddy.
 
 ---
 
-## Option 3: Self-Hosting Hardware
+### Other European Providers
+
+| Provider | Country | Price | Notes |
+|----------|---------|-------|-------|
+| **Netcup** | 🇩🇪 Germany | €2.99/month | Cheapest option |
+| **OVHcloud** | 🇫🇷 France | €3.50/month | Large EU provider |
+| **Scaleway** | 🇫🇷 France | €7.99/month | Good developer experience |
+| **Infomaniak** | 🇨🇭 Switzerland | €5.75/month | Swiss privacy, eco-friendly |
+| **Exoscale** | 🇨🇭 Switzerland | CHF 7/month | Swiss data protection |
+
+### European DNS & Domain Registrars
+
+| Service | Country |
+|---------|---------|
+| **Gandi** | 🇫🇷 France |
+| **Infomaniak** | 🇨🇭 Switzerland |
+| **OVH** | 🇫🇷 France |
+| **Hetzner DNS** | 🇩🇪 Germany (free with server) |
+
+---
+
+## Option 2: Self-Hosting Hardware
 
 ### A. Raspberry Pi 4/5 (Best value)
 
@@ -157,7 +100,7 @@ sudo apt install -y docker-compose
 # Clone and run
 git clone https://github.com/yourusername/budget.git
 cd budget
-docker-compose up -d
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ### B. Used Mini PCs (More powerful, quiet)
@@ -173,11 +116,12 @@ Great options from eBay/Amazon Renewed:
 
 **Total: ~$70-130 one-time**
 
-These are:
+Benefits:
 - ✅ Very quiet (no fan noise)
 - ✅ Low power (~15-35W)
 - ✅ x86 compatible (all Docker images work)
 - ✅ More powerful than Raspberry Pi
+- ✅ Can run other services (Pi-hole, Home Assistant, etc.)
 
 ### C. Old Laptop
 
@@ -201,10 +145,9 @@ Any laptop from ~2015+ with:
 
 ---
 
-## Recommended Setup for Self-Hosting
+## Network Setup for Self-Hosting
 
-### Network Configuration
-
+### Architecture
 ```
 Internet → Router → [Your Server]
                          ↓
@@ -265,73 +208,24 @@ systemctl start cloudflared
 
 | Option | Monthly Cost | Setup Effort | Reliability |
 |--------|--------------|--------------|-------------|
-| Fly.io + Neon | $0 | Low | High |
-| Hetzner VPS | $4 | Medium | High |
+| Hetzner VPS | €3.79 (~$4) | Medium | High |
+| Netcup VPS | €2.99 (~$3.20) | Medium | High |
 | Raspberry Pi | $0.50 (electric) | Medium | Medium |
 | Mini PC | $1.50 (electric) | Medium | High |
 | Old Laptop | $2 (electric) | Low | Medium |
 
 ---
 
-## My Recommendation
+## Recommendation
 
-**For simplicity:** Fly.io + Neon (free, zero maintenance)
-
-**For control & learning:** Hetzner €3.79/month VPS
+**For most users:** Hetzner CX22 at €3.79/month
+- European company, GDPR compliant
+- Great performance for the price
+- Automatic backups available
+- See `deploy/HETZNER.md` for full setup guide
 
 **For self-hosting:** Used Dell OptiPlex Micro (~$100 one-time, ~$1.50/month electric)
-
----
-
-## European-Only Deployment (No US Companies)
-
-For privacy-conscious users who want to avoid US cloud providers:
-
-### European Cloud Providers
-
-| Provider | Country | Price | Notes |
-|----------|---------|-------|-------|
-| **Hetzner Cloud** | 🇩🇪 Germany | €3.79/month | Best value |
-| **Netcup** | 🇩🇪 Germany | €2.99/month | Cheapest |
-| **OVHcloud** | 🇫🇷 France | €3.50/month | Large EU provider |
-| **Scaleway** | 🇫🇷 France | €7.99/month | Good DX |
-| **Infomaniak** | 🇨🇭 Switzerland | €5.75/month | Swiss privacy, eco-friendly |
-| **Exoscale** | 🇨🇭 Switzerland | CHF 7/month | Swiss data protection |
-
-### Quick Hetzner Deployment
-
-```bash
-# 1. Create CX22 server at hetzner.cloud (€3.79/month)
-# 2. Point your domain to the server IP
-# 3. SSH in and run:
-
-curl -fsSL https://get.docker.com | sh
-git clone <your-repo> /opt/budget
-cd /opt/budget
-
-# Edit Caddyfile - replace budget.example.com with your domain
-nano Caddyfile
-
-# Generate secrets and start
-cat > .env << EOF
-DATABASE_URL=postgres://budget:$(openssl rand -hex 16)@postgres:5432/budget
-JWT_SECRET=$(openssl rand -hex 32)
-POSTGRES_PASSWORD=$(openssl rand -hex 16)
-EOF
-
-docker compose -f docker-compose.hetzner.yml up -d
-```
-
-### European DNS & Domains
-
-| Service | Country |
-|---------|---------|
-| **Gandi** | 🇫🇷 France |
-| **Infomaniak** | 🇨🇭 Switzerland |
-| **OVH** | 🇫🇷 France |
-| **Hetzner DNS** | 🇩🇪 Germany (free) |
 - Best performance/watt ratio
 - Silent operation
 - Runs full x86 Docker
 - Can run other services too (Pi-hole, Home Assistant, etc.)
-

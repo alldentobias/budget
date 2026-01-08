@@ -175,7 +175,9 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
   for (const asset of userAssets) {
     const ownership = parseFloat(asset.ownershipPct) / 100;
     if (asset.type === "stock" && asset.currentPrice != null) {
-      totalAssets += Math.round(parseFloat(asset.quantity) * asset.currentPrice * ownership);
+      totalAssets += Math.round(
+        parseFloat(asset.quantity) * asset.currentPrice * ownership,
+      );
     } else if (asset.manualValue != null) {
       totalAssets += Math.round(asset.manualValue * ownership);
     }

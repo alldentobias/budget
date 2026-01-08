@@ -1,62 +1,73 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Download, Plus, Trash2, Palette } from 'lucide-react'
-import { categoriesApi, exportApi, Category } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { toast } from '@/components/ui/use-toast'
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, Palette, Plus, Trash2 } from "lucide-react";
+import { categoriesApi, Category, exportApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "@/components/ui/use-toast";
 
 export function SettingsPage() {
-  const { user } = useAuth()
-  const queryClient = useQueryClient()
-  const [newCategory, setNewCategory] = useState({ name: '', color: '#6b7280' })
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [newCategory, setNewCategory] = useState({
+    name: "",
+    color: "#6b7280",
+  });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: ["categories"],
     queryFn: categoriesApi.getAll,
-  })
+  });
 
   const createCategoryMutation = useMutation({
     mutationFn: categoriesApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] })
-      setNewCategory({ name: '', color: '#6b7280' })
-      toast({ title: 'Category created' })
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setNewCategory({ name: "", color: "#6b7280" });
+      toast({ title: "Category created" });
     },
-  })
+  });
 
   const deleteCategoryMutation = useMutation({
     mutationFn: categoriesApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] })
-      toast({ title: 'Category deleted' })
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category deleted" });
     },
-  })
+  });
 
-  const handleExport = async (format: 'csv' | 'json') => {
+  const handleExport = async (format: "csv" | "json") => {
     try {
-      const blob = await exportApi.exportAll(format)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `budget-export.${format}`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast({ title: 'Export downloaded' })
+      const blob = await exportApi.exportAll(format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `budget-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export downloaded" });
     } catch {
-      toast({ title: 'Export failed', variant: 'destructive' })
+      toast({ title: "Export failed", variant: "destructive" });
     }
-  }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
+        <p className="text-muted-foreground mt-1">
+          Manage your account and preferences
+        </p>
       </div>
 
       {/* Profile */}
@@ -75,7 +86,8 @@ export function SettingsPage() {
             <div>
               <p className="font-medium">{user?.email}</p>
               <p className="text-sm text-muted-foreground">
-                Member since {new Date(user?.createdAt || '').toLocaleDateString()}
+                Member since{" "}
+                {new Date(user?.createdAt || "").toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -91,9 +103,9 @@ export function SettingsPage() {
         <CardContent className="space-y-4">
           <form
             onSubmit={(e) => {
-              e.preventDefault()
+              e.preventDefault();
               if (newCategory.name) {
-                createCategoryMutation.mutate(newCategory)
+                createCategoryMutation.mutate(newCategory);
               }
             }}
             className="flex gap-3"
@@ -101,13 +113,15 @@ export function SettingsPage() {
             <Input
               placeholder="Category name"
               value={newCategory.name}
-              onChange={(e) => setNewCategory((c) => ({ ...c, name: e.target.value }))}
+              onChange={(e) =>
+                setNewCategory((c) => ({ ...c, name: e.target.value }))}
               className="flex-1"
             />
             <Input
               type="color"
               value={newCategory.color}
-              onChange={(e) => setNewCategory((c) => ({ ...c, color: e.target.value }))}
+              onChange={(e) =>
+                setNewCategory((c) => ({ ...c, color: e.target.value }))}
               className="w-14 p-1 h-10"
             />
             <Button type="submit" disabled={!newCategory.name}>
@@ -119,12 +133,20 @@ export function SettingsPage() {
 
           <div className="space-y-2">
             {categories.map((cat) => (
-              <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div
+                key={cat.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: cat.color }}
+                  />
                   <span className="font-medium">{cat.name}</span>
                   {cat.isDefault && (
-                    <span className="text-xs text-muted-foreground">(default)</span>
+                    <span className="text-xs text-muted-foreground">
+                      (default)
+                    </span>
                   )}
                 </div>
                 {!cat.isDefault && (
@@ -150,11 +172,11 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => handleExport('json')}>
+            <Button variant="outline" onClick={() => handleExport("json")}>
               <Download className="h-4 w-4 mr-2" />
               Export JSON
             </Button>
-            <Button variant="outline" onClick={() => handleExport('csv')}>
+            <Button variant="outline" onClick={() => handleExport("csv")}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
@@ -165,7 +187,5 @@ export function SettingsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
-
-

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { setCookie, deleteCookie } from "hono/cookie";
+import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
-import { hash, compare } from "bcrypt";
+import { compare, hash } from "bcrypt";
 import { db, users } from "../db/index.ts";
 import { eq } from "drizzle-orm";
 import { authMiddleware, createToken } from "../middleware/auth.ts";
@@ -48,7 +48,11 @@ authRoutes.post("/register", async (c) => {
         email: email.toLowerCase(),
         passwordHash,
       })
-      .returning({ id: users.id, email: users.email, createdAt: users.createdAt });
+      .returning({
+        id: users.id,
+        email: users.email,
+        createdAt: users.createdAt,
+      });
 
     // Create default categories for the user
     await db.insert(categories).values(
@@ -57,7 +61,7 @@ authRoutes.post("/register", async (c) => {
         name: cat.name,
         color: cat.color,
         isDefault: true,
-      }))
+      })),
     );
 
     // Create token
@@ -145,7 +149,7 @@ authRoutes.post("/logout", (c) => {
 
 authRoutes.get("/me", authMiddleware, async (c) => {
   const user = c.get("user");
-  
+
   const fullUser = await db.query.users.findFirst({
     where: eq(users.id, user.id),
   });
@@ -162,5 +166,3 @@ authRoutes.get("/me", authMiddleware, async (c) => {
 });
 
 export { authRoutes };
-
-
