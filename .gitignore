@@ -46,5 +46,12 @@ deno.lock
 .eggs/
 venv/
 .venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Test artifacts
+cookies.txt
 
 
