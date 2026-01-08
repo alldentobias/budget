@@ -58,7 +58,7 @@ importRoutes.post("/upload", async (c) => {
       const error = await response.json();
       return c.json(
         { message: error.detail || "Extraction failed" },
-        response.status,
+        response.status as 400 | 500,
       );
     }
 

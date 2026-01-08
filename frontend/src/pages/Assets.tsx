@@ -11,7 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Asset, assetsApi, Loan, loansApi } from "@/lib/api";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
