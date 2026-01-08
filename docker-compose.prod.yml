@@ -76,7 +76,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD:-budget_secret}
       - PGDATABASE=budget
     volumes:
-      - ./backups:/backups
+      - /opt/budget-backups:/backups
     entrypoint: /bin/sh
     command: |
       -c 'while true; do

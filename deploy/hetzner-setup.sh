@@ -25,6 +25,7 @@ NC='\033[0m' # No Color
 
 DOMAIN="${1:-}"
 APP_DIR="/opt/budget"
+BACKUP_DIR="/opt/budget-backups"
 REPO_URL="${2:-https://github.com/YOUR_USERNAME/budget.git}"
 
 echo -e "${GREEN}"
@@ -71,27 +72,26 @@ else
     echo "Docker Compose already installed"
 fi
 
-echo -e "${GREEN}[4/7]${NC} Setting up application directory..."
-mkdir -p "$APP_DIR"
-mkdir -p "$APP_DIR/backups"
-cd "$APP_DIR"
+echo -e "${GREEN}[4/7]${NC} Setting up directories..."
+mkdir -p "$BACKUP_DIR"
 
 echo -e "${GREEN}[5/7]${NC} Cloning repository..."
-if [ -d ".git" ]; then
+if [ -d "$APP_DIR/.git" ]; then
     echo "Repository exists, pulling latest..."
+    cd "$APP_DIR"
     git pull
-elif [ "$(ls -A $APP_DIR 2>/dev/null | grep -v backups | grep -v .env)" ]; then
-    echo -e "${YELLOW}Directory not empty. Cleaning up (preserving backups and .env)...${NC}"
-    # Preserve backups and .env if they exist
-    [ -f .env ] && cp .env /tmp/budget_env_backup
-    # Remove everything except backups
-    find . -mindepth 1 -maxdepth 1 ! -name 'backups' -exec rm -rf {} +
-    # Clone fresh
-    git clone "$REPO_URL" .
+elif [ -d "$APP_DIR" ] && [ "$(ls -A $APP_DIR 2>/dev/null)" ]; then
+    echo -e "${YELLOW}Directory exists but is not a git repo. Removing and cloning fresh...${NC}"
+    # Preserve .env if it exists
+    [ -f "$APP_DIR/.env" ] && cp "$APP_DIR/.env" /tmp/budget_env_backup
+    rm -rf "$APP_DIR"
+    git clone "$REPO_URL" "$APP_DIR"
+    cd "$APP_DIR"
     # Restore .env if it existed
     [ -f /tmp/budget_env_backup ] && mv /tmp/budget_env_backup .env
 else
-    git clone "$REPO_URL" .
+    git clone "$REPO_URL" "$APP_DIR"
+    cd "$APP_DIR"
 fi
 
 echo -e "${GREEN}[6/7]${NC} Generating secure credentials..."
@@ -141,7 +141,7 @@ if docker compose -f docker-compose.hetzner.yml ps | grep -q "Up"; then
     echo "  Stop:           cd $APP_DIR && docker compose -f docker-compose.hetzner.yml down"
     echo "  Update:         cd $APP_DIR && git pull && docker compose -f docker-compose.hetzner.yml up -d --build"
     echo ""
-    echo "Backups are saved daily to: $APP_DIR/backups/"
+    echo "Backups are saved to: $BACKUP_DIR/"
     echo "Credentials are stored in: $APP_DIR/.env"
 else
     echo -e "${RED}Error: Some services failed to start${NC}"

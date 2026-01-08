@@ -106,7 +106,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD}
       - PGDATABASE=budget
     volumes:
-      - ./backups:/backups
+      - /opt/budget-backups:/backups
     entrypoint: /bin/sh
     command: |
       -c 'echo "Backup service started. First backup in 1 hour..."
