@@ -22,6 +22,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgres://budget:budget_secret@postgres:5432/budget}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - PYTHON_SERVICE_URL=http://python:8001
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
     depends_on:
       postgres:
         condition: service_healthy

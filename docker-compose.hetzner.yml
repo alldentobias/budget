@@ -49,6 +49,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - PYTHON_SERVICE_URL=http://python:8001
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
     depends_on:
       postgres:
         condition: service_healthy
