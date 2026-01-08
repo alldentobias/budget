@@ -6,6 +6,10 @@ __pycache__/
 # Build outputs
 dist/
 build/
+*.tsbuildinfo
+*.d.ts
+!src/**/*.d.ts
+vite.config.js
 
 # Environment
 .env
@@ -25,6 +29,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Database
 *.db
@@ -53,5 +60,17 @@ htmlcov/
 
 # Test artifacts
 cookies.txt
+coverage/
+.nyc_output/
+
+# Docker
+.docker/
+
+# Misc
+*.pem
+*.local
+.cache/
+.turbo/
+.eslintcache
 
 
