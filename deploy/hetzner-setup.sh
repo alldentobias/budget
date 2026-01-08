@@ -80,6 +80,16 @@ echo -e "${GREEN}[5/7]${NC} Cloning repository..."
 if [ -d ".git" ]; then
     echo "Repository exists, pulling latest..."
     git pull
+elif [ "$(ls -A $APP_DIR 2>/dev/null | grep -v backups | grep -v .env)" ]; then
+    echo -e "${YELLOW}Directory not empty. Cleaning up (preserving backups and .env)...${NC}"
+    # Preserve backups and .env if they exist
+    [ -f .env ] && cp .env /tmp/budget_env_backup
+    # Remove everything except backups
+    find . -mindepth 1 -maxdepth 1 ! -name 'backups' -exec rm -rf {} +
+    # Clone fresh
+    git clone "$REPO_URL" .
+    # Restore .env if it existed
+    [ -f /tmp/budget_env_backup ] && mv /tmp/budget_env_backup .env
 else
     git clone "$REPO_URL" .
 fi
