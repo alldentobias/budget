@@ -84,22 +84,14 @@ categoriesRoutes.delete("/:id", async (c) => {
   const user = c.get("user");
   const categoryId = c.req.param("id");
 
-  // Check if it's a default category
-  const category = await db.query.categories.findFirst({
-    where: and(eq(categories.id, categoryId), eq(categories.userId, user.id)),
-  });
+  const deleted = await db
+    .delete(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, user.id)))
+    .returning();
 
-  if (!category) {
+  if (deleted.length === 0) {
     return c.json({ message: "Category not found" }, 404);
   }
-
-  if (category.isDefault) {
-    return c.json({ message: "Cannot delete default categories" }, 400);
-  }
-
-  await db
-    .delete(categories)
-    .where(and(eq(categories.id, categoryId), eq(categories.userId, user.id)));
 
   return c.body(null, 204);
 });

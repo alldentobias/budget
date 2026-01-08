@@ -72,6 +72,9 @@ export const authApi = {
   logout: () => fetchApi<void>("/auth/logout", { method: "POST" }),
 
   me: () => fetchApi<User>("/auth/me"),
+
+  registrationStatus: () =>
+    fetchApi<{ registrationEnabled: boolean }>("/auth/registration-status"),
 };
 
 // Dashboard

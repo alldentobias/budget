@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
+import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,27 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const { register: registerUser } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  useEffect(() => {
+    authApi.registrationStatus()
+      .then((res) => {
+        if (!res.registrationEnabled) {
+          toast({
+            title: "Registration disabled",
+            description: "Contact the administrator to create an account.",
+            variant: "destructive",
+          });
+          navigate("/login");
+        }
+        setCheckingStatus(false);
+      })
+      .catch(() => {
+        navigate("/login");
+      });
+  }, [navigate]);
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -40,6 +61,10 @@ export function RegisterPage() {
       confirmPassword: "",
     },
   });
+
+  if (checkingStatus) {
+    return null; // Or a loading spinner
+  }
 
   const onSubmit = async (data: RegisterForm) => {
     try {

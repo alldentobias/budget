@@ -142,21 +142,14 @@ export function SettingsPage() {
                     style={{ backgroundColor: cat.color }}
                   />
                   <span className="font-medium">{cat.name}</span>
-                  {cat.isDefault && (
-                    <span className="text-xs text-muted-foreground">
-                      (default)
-                    </span>
-                  )}
                 </div>
-                {!cat.isDefault && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                >
+                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                </Button>
               </div>
             ))}
           </div>

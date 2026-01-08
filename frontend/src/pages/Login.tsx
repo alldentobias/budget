@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
+import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,13 @@ type LoginForm = z.infer<typeof loginSchema>;
 export function LoginPage() {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  useEffect(() => {
+    authApi.registrationStatus()
+      .then((res) => setRegistrationEnabled(res.registrationEnabled))
+      .catch(() => setRegistrationEnabled(false));
+  }, []);
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -104,12 +112,14 @@ export function LoginPage() {
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign in"}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              Don't have an account?{" "}
-              <Link to="/register" className="text-primary hover:underline">
-                Create one
-              </Link>
-            </p>
+            {registrationEnabled && (
+              <p className="text-sm text-muted-foreground text-center">
+                Don't have an account?{" "}
+                <Link to="/register" className="text-primary hover:underline">
+                  Create one
+                </Link>
+              </p>
+            )}
           </CardFooter>
         </form>
       </Card>

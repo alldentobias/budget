@@ -5,7 +5,6 @@ import { compare, hash } from "bcrypt";
 import { db, users } from "../db/index.ts";
 import { eq } from "drizzle-orm";
 import { authMiddleware, createToken } from "../middleware/auth.ts";
-import { categories } from "../db/schema.ts";
 
 const authRoutes = new Hono();
 
@@ -14,19 +13,17 @@ const authSchema = z.object({
   password: z.string().min(6),
 });
 
-// Default categories to create for new users
-const defaultCategories = [
-  { name: "Food & Dining", color: "#f97316" },
-  { name: "Transportation", color: "#3b82f6" },
-  { name: "Shopping", color: "#8b5cf6" },
-  { name: "Entertainment", color: "#ec4899" },
-  { name: "Bills & Utilities", color: "#eab308" },
-  { name: "Healthcare", color: "#14b8a6" },
-  { name: "Housing", color: "#6366f1" },
-  { name: "Other", color: "#6b7280" },
-];
+// Registration is disabled by default. Set ALLOW_REGISTRATION=true to enable.
+const allowRegistration = Deno.env.get("ALLOW_REGISTRATION") === "true";
 
 authRoutes.post("/register", async (c) => {
+  // Check if registration is allowed
+  if (!allowRegistration) {
+    return c.json({ 
+      message: "Registration is disabled. Contact the administrator." 
+    }, 403);
+  }
+
   try {
     const body = await c.req.json();
     const { email, password } = authSchema.parse(body);
@@ -53,16 +50,6 @@ authRoutes.post("/register", async (c) => {
         email: users.email,
         createdAt: users.createdAt,
       });
-
-    // Create default categories for the user
-    await db.insert(categories).values(
-      defaultCategories.map((cat) => ({
-        userId: newUser.id,
-        name: cat.name,
-        color: cat.color,
-        isDefault: true,
-      })),
-    );
 
     // Create token
     const token = await createToken(newUser.id);
@@ -91,6 +78,11 @@ authRoutes.post("/register", async (c) => {
     console.error("Register error:", error);
     return c.json({ message: "Registration failed" }, 500);
   }
+});
+
+// Check if registration is enabled (for frontend)
+authRoutes.get("/registration-status", (c) => {
+  return c.json({ registrationEnabled: allowRegistration });
 });
 
 authRoutes.post("/login", async (c) => {
