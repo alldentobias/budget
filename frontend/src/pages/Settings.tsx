@@ -1,8 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Plus, Trash2 } from "lucide-react";
-import { categoriesApi, exportApi } from "@/lib/api";
+import { categoriesApi, Category, exportApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +32,7 @@ export function SettingsPage() {
     name: "",
     color: "#6b7280",
   });
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -41,9 +52,16 @@ export function SettingsPage() {
     mutationFn: categoriesApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setCategoryToDelete(null);
       toast({ title: "Category deleted" });
     },
   });
+
+  const handleDeleteCategory = () => {
+    if (categoryToDelete) {
+      deleteCategoryMutation.mutate(categoryToDelete.id);
+    }
+  };
 
   const handleExport = async (format: "csv" | "json") => {
     try {
@@ -146,7 +164,7 @@ export function SettingsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                  onClick={() => setCategoryToDelete(cat)}
                 >
                   <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                 </Button>
@@ -155,6 +173,28 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Category Confirmation */}
+      <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{categoryToDelete?.name}"? 
+              Expenses using this category will become uncategorized.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteCategory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Data Export */}
       <Card>
