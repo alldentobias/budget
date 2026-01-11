@@ -16,6 +16,17 @@ const authSchema = z.object({
 // Registration is disabled by default. Set ALLOW_REGISTRATION=true to enable.
 const allowRegistration = Deno.env.get("ALLOW_REGISTRATION") === "true";
 
+// Cookie security: secure=true in production (HTTPS)
+const isProduction = Deno.env.get("DENO_ENV") === "production" ||
+  Deno.env.get("NODE_ENV") === "production";
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: "Lax" as const,
+  maxAge: 60 * 60 * 24 * 7, // 7 days
+  path: "/",
+};
+
 authRoutes.post("/register", async (c) => {
   // Check if registration is allowed
   if (!allowRegistration) {
@@ -55,13 +66,7 @@ authRoutes.post("/register", async (c) => {
     const token = await createToken(newUser.id);
 
     // Set cookie
-    setCookie(c, "auth_token", token, {
-      httpOnly: true,
-      secure: false, // Set to true in production
-      sameSite: "Lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
+    setCookie(c, "auth_token", token, cookieOptions);
 
     return c.json({
       user: {
@@ -109,13 +114,7 @@ authRoutes.post("/login", async (c) => {
     const token = await createToken(user.id);
 
     // Set cookie
-    setCookie(c, "auth_token", token, {
-      httpOnly: true,
-      secure: false, // Set to true in production
-      sameSite: "Lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
+    setCookie(c, "auth_token", token, cookieOptions);
 
     return c.json({
       user: {

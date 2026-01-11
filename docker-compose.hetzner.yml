@@ -50,6 +50,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - PYTHON_SERVICE_URL=http://python:8001
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
+      - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
