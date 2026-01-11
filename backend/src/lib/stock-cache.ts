@@ -13,8 +13,8 @@ interface CachedQuote {
 // In-memory cache for stock quotes
 const quoteCache = new Map<string, CachedQuote>();
 
-// Cache TTL: 15 minutes
-const CACHE_TTL_MS = 15 * 60 * 1000;
+// Cache TTL: 24 hours
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Delay between sequential requests to avoid rate limiting
 const REQUEST_DELAY_MS = 500;

@@ -6,7 +6,7 @@ import { fetchQuote, fetchQuotesWithRateLimit } from "../lib/stock-cache.ts";
 const stocksRoutes = new Hono();
 stocksRoutes.use("*", authMiddleware);
 
-// Get quote for a single ticker (uses cache with 15-minute TTL)
+// Get quote for a single ticker (uses cache with 24-hour TTL)
 stocksRoutes.get("/quote/:ticker", async (c) => {
   const ticker = c.req.param("ticker");
 
@@ -26,7 +26,7 @@ stocksRoutes.get("/quote/:ticker", async (c) => {
   });
 });
 
-// Get quotes for multiple tickers (uses cache with 15-minute TTL, rate-limited)
+// Get quotes for multiple tickers (uses cache with 24-hour TTL, rate-limited)
 stocksRoutes.post("/quotes", async (c) => {
   try {
     const body = await c.req.json();
