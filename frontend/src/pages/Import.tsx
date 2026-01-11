@@ -69,6 +69,16 @@ export function ImportPage() {
     queryFn: categoriesApi.getAll,
   });
 
+  // Check for existing staged expenses (even on upload step)
+  const { data: existingStagedCount = 0 } = useQuery({
+    queryKey: ["staged-expenses-count", targetYearMonth],
+    queryFn: async () => {
+      const staged = await importApi.getStaged(targetYearMonth);
+      return staged.length;
+    },
+    enabled: step === "upload",
+  });
+
   const { data: stagedExpenses = [], refetch: refetchStaged } = useQuery({
     queryKey: ["staged-expenses", targetYearMonth],
     queryFn: () => importApi.getStaged(targetYearMonth),
@@ -115,17 +125,17 @@ export function ImportPage() {
     onMutate: async ({ id, update }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["staged-expenses", targetYearMonth] });
-      
+
       // Snapshot the previous value
       const previousStaged = queryClient.getQueryData(["staged-expenses", targetYearMonth]);
-      
-      // Optimistically update the cache
+
+      // Optimistically update the cache (preserves array order)
       queryClient.setQueryData(
         ["staged-expenses", targetYearMonth],
-        (old: typeof stagedExpenses) => 
+        (old: typeof stagedExpenses) =>
           old?.map((s) => s.id === id ? { ...s, ...update } : s)
       );
-      
+
       return { previousStaged };
     },
     onError: (_err, _variables, context) => {
@@ -134,10 +144,8 @@ export function ImportPage() {
         queryClient.setQueryData(["staged-expenses", targetYearMonth], context.previousStaged);
       }
     },
-    onSettled: () => {
-      // Refetch after mutation settles to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["staged-expenses", targetYearMonth] });
-    },
+    // Don't refetch on success - optimistic update is sufficient
+    // Only refetch on error (handled above by rollback)
   });
 
   const deleteStagedMutation = useMutation({
@@ -155,6 +163,15 @@ export function ImportPage() {
       queryClient.invalidateQueries({ queryKey: ["expense-stats"] });
       setStep("done");
       toast({ title: `Committed ${result.committed} expenses!` });
+    },
+  });
+
+  const clearStagedMutation = useMutation({
+    mutationFn: () => importApi.clearStaged(targetYearMonth),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staged-expenses-count", targetYearMonth] });
+      queryClient.invalidateQueries({ queryKey: ["staged-expenses", targetYearMonth] });
+      toast({ title: "Cleared staged expenses" });
     },
   });
 
@@ -218,7 +235,7 @@ export function ImportPage() {
 
   const handleBulkDelete = () => {
     const ids = Array.from(selectedStaged);
-    ids.forEach((id) => deleteStagedMutation.mutate(id));
+    ids.forEach((id) => { deleteStagedMutation.mutate(id); });
     setSelectedStaged(new Set());
   };
 
@@ -351,145 +368,181 @@ export function ImportPage() {
 
       {/* Upload Step */}
       {step === "upload" && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload File</CardTitle>
-              <CardDescription>
-                Select a CSV or Excel file from your bank
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div
-                {...getRootProps()}
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                  isDragActive
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25 hover:border-primary/50",
-                )}
-              >
-                <input {...getInputProps()} />
-                <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-                {uploadedFile
-                  ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <span className="font-medium">{uploadedFile.name}</span>
-                    </div>
-                  )
-                  : isDragActive
-                  ? <p>Drop the file here...</p>
-                  : (
-                    <div>
-                      <p className="font-medium">Drop your file here</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        or click to browse
-                      </p>
-                    </div>
-                  )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Extraction Script</label>
-                <Select
-                  value={selectedExtractor}
-                  onValueChange={setSelectedExtractor}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an extractor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {extractorsData?.extractors.map((ext) => (
-                      <SelectItem key={ext.name} value={ext.name}>
-                        <div>
-                          <div className="font-medium">{ext.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {ext.description}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Import to Month
-                </label>
-                <Select
-                  value={targetYearMonth.toString()}
-                  onValueChange={(v) => setTargetYearMonth(parseInt(v))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {monthOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value.toString()}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Transactions not in this month will be filtered out
-                </p>
-              </div>
-
-              <Button
-                onClick={handleUpload}
-                disabled={!uploadedFile || !selectedExtractor ||
-                  uploadMutation.isPending}
-                className="w-full"
-              >
-                {uploadMutation.isPending ? "Processing..." : "Process File"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Extractors</CardTitle>
-              <CardDescription>
-                Choose the one that matches your bank's format
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {extractorsData?.extractors.map((ext) => (
-                  <div
-                    key={ext.name}
-                    className={cn(
-                      "p-3 rounded-lg border cursor-pointer transition-colors",
-                      selectedExtractor === ext.name
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/50",
-                    )}
-                    onClick={() => setSelectedExtractor(ext.name)}
-                  >
-                    <div className="font-medium">{ext.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {ext.description}
-                    </div>
-                    <div className="flex gap-1 mt-2">
-                      {ext.supported_formats.map((format) => (
-                        <Badge
-                          key={format}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {format}
-                        </Badge>
-                      ))}
+        <div className="space-y-6">
+          {/* Existing staged expenses prompt */}
+          {existingStagedCount > 0 && (
+            <Card className="border-primary/50 bg-primary/5">
+              <CardContent className="py-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <FileText className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg">
+                      You have {existingStagedCount} staged transaction{existingStagedCount !== 1 ? "s" : ""}
+                    </h3>
+                    <p className="text-muted-foreground mt-1">
+                      There are already staged transactions for {getMonthName(month)} {year}.
+                      Would you like to continue reviewing them or start fresh?
+                    </p>
+                    <div className="flex gap-3 mt-4">
+                      <Button onClick={() => { setStep("review"); }}>
+                        Continue reviewing
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { clearStagedMutation.mutate(); }}
+                        disabled={clearStagedMutation.isPending}
+                      >
+                        {clearStagedMutation.isPending ? "Clearing..." : "Start fresh"}
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload File</CardTitle>
+                <CardDescription>
+                  Select a CSV or Excel file from your bank
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div
+                  {...getRootProps()}
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                    isDragActive
+                      ? "border-primary bg-primary/5"
+                      : "border-muted-foreground/25 hover:border-primary/50",
+                  )}
+                >
+                  <input {...getInputProps()} />
+                  <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+                  {uploadedFile
+                    ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <span className="font-medium">{uploadedFile.name}</span>
+                      </div>
+                    )
+                    : isDragActive
+                      ? <p>Drop the file here...</p>
+                      : (
+                        <div>
+                          <p className="font-medium">Drop your file here</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            or click to browse
+                          </p>
+                        </div>
+                      )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Extraction Script</label>
+                  <Select
+                    value={selectedExtractor}
+                    onValueChange={setSelectedExtractor}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an extractor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {extractorsData?.extractors.map((ext) => (
+                        <SelectItem key={ext.name} value={ext.name}>
+                          <div>
+                            <div className="font-medium">{ext.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {ext.description}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Import to Month
+                  </label>
+                  <Select
+                    value={targetYearMonth.toString()}
+                    onValueChange={(v) => { setTargetYearMonth(parseInt(v)); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value.toString()}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Transactions not in this month will be filtered out
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleUpload}
+                  disabled={!uploadedFile || !selectedExtractor ||
+                    uploadMutation.isPending}
+                  className="w-full"
+                >
+                  {uploadMutation.isPending ? "Processing..." : "Process File"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Available Extractors</CardTitle>
+                <CardDescription>
+                  Choose the one that matches your bank's format
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {extractorsData?.extractors.map((ext) => (
+                    <div
+                      key={ext.name}
+                      className={cn(
+                        "p-3 rounded-lg border cursor-pointer transition-colors",
+                        selectedExtractor === ext.name
+                          ? "border-primary bg-primary/5"
+                          : "hover:bg-muted/50",
+                      )}
+                      onClick={() => { setSelectedExtractor(ext.name); }}
+                    >
+                      <div className="font-medium">{ext.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {ext.description}
+                      </div>
+                      <div className="flex gap-1 mt-2">
+                        {ext.supported_formats.map((format) => (
+                          <Badge
+                            key={format}
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            {format}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -514,11 +567,11 @@ export function ImportPage() {
                       )}
                       {importResult.filteredByMonth &&
                         importResult.filteredByMonth > 0 && (
-                        <p>
-                          {importResult.filteredByMonth}{" "}
-                          transactions filtered out (different month)
-                        </p>
-                      )}
+                          <p>
+                            {importResult.filteredByMonth}{" "}
+                            transactions filtered out (different month)
+                          </p>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -566,7 +619,7 @@ export function ImportPage() {
                     </>
                   )}
                   <Button
-                    onClick={() => commitMutation.mutate()}
+                    onClick={() => { commitMutation.mutate(); }}
                     disabled={commitMutation.isPending ||
                       nonDuplicateStaged.length === 0}
                   >
@@ -606,6 +659,9 @@ export function ImportPage() {
                                 nonDuplicateStaged.length}
                               onCheckedChange={toggleSelectAll}
                             />
+                          </th>
+                          <th className="p-3 text-left text-sm font-medium text-muted-foreground">
+                            Index
                           </th>
                           <th className="p-3 text-left text-sm font-medium text-muted-foreground">
                             Date
@@ -661,8 +717,11 @@ export function ImportPage() {
                             <td className="p-3">
                               <Checkbox
                                 checked={selectedStaged.has(staged.id)}
-                                onCheckedChange={() => toggleStaged(staged.id)}
+                                onCheckedChange={() => { toggleStaged(staged.id); }}
                               />
+                            </td>
+                            <td className="p-3 text-sm tabular-nums">
+                              {staged.sortIndex}
                             </td>
                             <td className="p-3 text-sm tabular-nums whitespace-nowrap">
                               {formatDate(staged.date)}
@@ -682,8 +741,7 @@ export function ImportPage() {
                             <td className="p-3">
                               <Select
                                 value={staged.categoryId || "uncategorized"}
-                                onValueChange={(value) =>
-                                  handleCategoryChange(staged.id, value)}
+                                onValueChange={(value) => { handleCategoryChange(staged.id, value); }}
                               >
                                 <SelectTrigger className="w-[130px]">
                                   <SelectValue />
@@ -711,15 +769,13 @@ export function ImportPage() {
                                 className="w-[100px] h-8 text-xs"
                                 placeholder="Notes..."
                                 defaultValue={staged.notes || ""}
-                                onBlur={(e) =>
-                                  handleNotesChange(staged.id, e.target.value)}
+                                onBlur={(e) => { handleNotesChange(staged.id, e.target.value); }}
                               />
                             </td>
                             <td className="p-3 text-center">
                               <Checkbox
                                 checked={staged.isShared}
-                                onCheckedChange={(checked) =>
-                                  handleIsSharedChange(staged.id, !!checked)}
+                                onCheckedChange={(checked) => { handleIsSharedChange(staged.id, !!checked); }}
                               />
                             </td>
                             <td className="p-3">
@@ -732,11 +788,12 @@ export function ImportPage() {
                                 defaultValue={fromMinorUnits(
                                   staged.collectToMe,
                                 ) || ""}
-                                onBlur={(e) =>
+                                onBlur={(e) => {
                                   handleCollectToMeChange(
                                     staged.id,
                                     e.target.value,
-                                  )}
+                                  );
+                                }}
                               />
                             </td>
                             <td className="p-3">
@@ -749,19 +806,19 @@ export function ImportPage() {
                                 defaultValue={fromMinorUnits(
                                   staged.collectFromMe,
                                 ) || ""}
-                                onBlur={(e) =>
+                                onBlur={(e) => {
                                   handleCollectFromMeChange(
                                     staged.id,
                                     e.target.value,
-                                  )}
+                                  );
+                                }}
                               />
                             </td>
                             <td
-                              className={`p-3 text-right font-medium tabular-nums ${
-                                staged.amount < 0
+                              className={`p-3 text-right font-medium tabular-nums ${staged.amount < 0
                                   ? "text-rose-500"
                                   : "text-emerald-500"
-                              }`}
+                                }`}
                             >
                               {formatCurrency(staged.amount)}
                             </td>
@@ -769,8 +826,7 @@ export function ImportPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() =>
-                                  deleteStagedMutation.mutate(staged.id)}
+                                onClick={() => { deleteStagedMutation.mutate(staged.id); }}
                               >
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
                               </Button>
@@ -843,8 +899,7 @@ export function ImportPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() =>
-                                deleteStagedMutation.mutate(staged.id)}
+                              onClick={() => { deleteStagedMutation.mutate(staged.id); }}
                             >
                               <X className="h-4 w-4 text-muted-foreground" />
                             </Button>
@@ -859,7 +914,7 @@ export function ImportPage() {
           )}
 
           <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setStep("upload")}>
+            <Button variant="outline" onClick={() => { setStep("upload"); }}>
               Back to Upload
             </Button>
           </div>

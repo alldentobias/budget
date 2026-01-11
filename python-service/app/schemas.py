@@ -9,6 +9,7 @@ class ExtractedTransaction(BaseModel):
     date: str  # ISO format date string
     title: str
     amount: int  # Amount in minor units (øre/cents), e.g., 1250 = 12.50 kr
+    sortIndex: int # Inherent sorting order
     source: str | None = None
     description: str | None = None
     isShared: bool | None = False

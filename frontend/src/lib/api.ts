@@ -241,6 +241,9 @@ export const importApi = {
   getStaged: (yearMonth: number) =>
     fetchApi<StagedExpense[]>("/import/staged", { params: { yearMonth } }),
 
+  getStagedSummary: () =>
+    fetchApi<{ yearMonth: number; count: number }[]>("/import/staged/summary"),
+
   updateStaged: (id: string, update: Partial<StagedExpenseUpdate>) =>
     fetchApi<StagedExpense>(`/import/staged/${id}`, {
       method: "PUT",
@@ -249,6 +252,12 @@ export const importApi = {
 
   deleteStaged: (id: string) =>
     fetchApi<void>(`/import/staged/${id}`, { method: "DELETE" }),
+
+  clearStaged: (yearMonth: number) =>
+    fetchApi<{ deleted: number }>("/import/staged/clear", {
+      method: "POST",
+      body: JSON.stringify({ yearMonth }),
+    }),
 
   commit: (yearMonth: number) =>
     fetchApi<{ committed: number }>("/import/commit", {
@@ -461,6 +470,7 @@ export interface StagedExpense {
   collectToMe: number;
   collectFromMe: number;
   yearMonth: number;
+  sortIndex: number;
   notes?: string;
 }
 

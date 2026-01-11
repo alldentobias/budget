@@ -84,7 +84,8 @@ importRoutes.post("/upload", async (c) => {
     }
 
     // Get existing expenses for the target month to check for duplicates
-    const yearMonthToCheck = targetYearMonth || dateToYearMonth(transactions[0]?.date || new Date().toISOString());
+    const yearMonthToCheck = targetYearMonth ||
+      dateToYearMonth(transactions[0]?.date || new Date().toISOString());
     const existingExpenses = await db.query.expenses.findMany({
       where: and(
         eq(expenses.userId, user.id),
@@ -134,7 +135,7 @@ importRoutes.post("/upload", async (c) => {
           collectToMe: 0,
           collectFromMe: 0,
           notes: null,
-          sortIndex: i, // Preserve original file order
+          sortIndex: tx.sortIndex, // Preserve original file order
         })
         .returning();
 
@@ -152,6 +153,32 @@ importRoutes.post("/upload", async (c) => {
     console.error("Upload error:", error);
     return c.json({ message: "Upload failed" }, 500);
   }
+});
+
+// Get summary of staged expenses across all months
+importRoutes.get("/staged/summary", async (c) => {
+  const user = c.get("user");
+
+  const staged = await db.query.stagedExpenses.findMany({
+    where: eq(stagedExpenses.userId, user.id),
+    columns: { yearMonth: true },
+  });
+
+  // Group by yearMonth and count
+  const summary = staged.reduce(
+    (acc, s) => {
+      const existing = acc.find((x) => x.yearMonth === s.yearMonth);
+      if (existing) {
+        existing.count++;
+      } else {
+        acc.push({ yearMonth: s.yearMonth, count: 1 });
+      }
+      return acc;
+    },
+    [] as { yearMonth: number; count: number }[],
+  );
+
+  return c.json(summary);
 });
 
 // Get staged expenses by month
@@ -200,9 +227,7 @@ importRoutes.put("/staged/:id", async (c) => {
     const [updated] = await db
       .update(stagedExpenses)
       .set({
-        categoryId: data.categoryId !== undefined
-          ? (data.categoryId || null)
-          : undefined,
+        categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
         title: data.title,
         amount: data.amount,
         date: data.date,
@@ -255,6 +280,27 @@ importRoutes.delete("/staged/:id", async (c) => {
   }
 
   return c.body(null, 204);
+});
+
+// Clear all staged expenses for a month
+importRoutes.post("/staged/clear", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json();
+  const { yearMonth } = z.object({
+    yearMonth: z.number(),
+  }).parse(body);
+
+  const deleted = await db
+    .delete(stagedExpenses)
+    .where(
+      and(
+        eq(stagedExpenses.userId, user.id),
+        eq(stagedExpenses.yearMonth, yearMonth),
+      ),
+    )
+    .returning();
+
+  return c.json({ deleted: deleted.length });
 });
 
 // Commit staged expenses to expenses table

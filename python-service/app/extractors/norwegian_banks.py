@@ -78,12 +78,13 @@ def extract_dnb_mastercard(file_content: bytes, filename: str) -> list[Extracted
     df = df.drop("Inn", axis=1)
 
     transactions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         transactions.append(ExtractedTransaction(
             date=parse_date(row["Dato"]),
             title=str(row["Beløpet gjelder"]).strip(),
             amount=parse_norwegian_amount(row["Ut"]),
             source="DNB Credit",
+            sortIndex=idx,
             raw_data=row.to_json()
         ))
 
@@ -113,12 +114,13 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
     df = df.dropna(subset=["Dato", "Beskrivelse"])
 
     transactions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         transactions.append(ExtractedTransaction(
             date=parse_date(row["Dato"]),
             title=str(row["Beskrivelse"]).strip(),
             amount=parse_norwegian_amount(row["Beløp"]),
             source="Amex",
+            sortIndex=idx,
             raw_data=row.to_json()
         ))
 
@@ -164,12 +166,13 @@ def extract_sb1_credit(file_content: bytes, filename: str) -> list[ExtractedTran
     df = df[df['Beløp'] < 0]
 
     transactions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         transactions.append(ExtractedTransaction(
             date=parse_date(row["Kjøpsdato"]),
             title=str(row["Beskrivelse"]).strip(),
             amount=to_minor_units(abs(float(row["Beløp"]))),
             source="SB1 Credit",
+            sortIndex=idx,
             raw_data=row.to_json()
         ))
 
@@ -215,7 +218,7 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
     df = df[df['Ut'] < 0]
 
     transactions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         # Parse date with dayfirst=True for Norwegian format (DD.MM.YYYY)
         date_val = row["Dato"]
         if isinstance(date_val, str):
@@ -231,6 +234,7 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
             title=str(row["Beskrivelse"]).strip(),
             amount=to_minor_units(abs(float(row["Ut"]))),
             source="SB1 Common",
+            sortIndex=idx,
             isShared=True,
             raw_data=row.to_json()
         ))
@@ -277,7 +281,7 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
     df = df[df['Ut'] < 0]
 
     transactions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         # Parse date with dayfirst=True for Norwegian format (DD.MM.YYYY)
         date_val = row["Dato"]
         if isinstance(date_val, str):
@@ -293,6 +297,7 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
             title=str(row["Beskrivelse"]).strip(),
             amount=to_minor_units(abs(float(row["Ut"]))),
             source="SB1 Debit",
+            sortIndex=idx,
             raw_data=row.to_json()
         ))
 
