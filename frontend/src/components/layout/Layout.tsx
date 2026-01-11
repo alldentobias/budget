@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -9,7 +11,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -28,6 +30,14 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebar-collapsed");
+    return saved === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
 
   const handleLogout = async () => {
     await logout();
@@ -58,41 +68,64 @@ export function Layout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 bg-card border-r transform transition-all duration-200 ease-in-out lg:translate-x-0",
+          collapsed ? "lg:w-16" : "lg:w-64",
+          "w-64", // Mobile always full width
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="hidden lg:flex items-center gap-3 px-6 h-16 border-b">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-emerald-400 flex items-center justify-center shadow-lg shadow-primary/25">
-              <span className="text-xl font-bold text-white">$</span>
+          <div className="hidden lg:flex items-center justify-between h-16 border-b px-3">
+            <div className={cn(
+              "flex items-center gap-3 overflow-hidden transition-all",
+              collapsed ? "w-10" : "w-full"
+            )}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-emerald-400 flex items-center justify-center shadow-lg shadow-primary/25 flex-shrink-0">
+                <span className="text-xl font-bold text-white">$</span>
+              </div>
+              {!collapsed && (
+                <div className="min-w-0">
+                  <h1 className="font-semibold text-lg">Budget</h1>
+                  <p className="text-xs text-muted-foreground">Financial Tracker</p>
+                </div>
+              )}
             </div>
-            <div>
-              <h1 className="font-semibold text-lg">Budget</h1>
-              <p className="text-xs text-muted-foreground">Financial Tracker</p>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 flex-shrink-0"
+              onClick={() => { setCollapsed(!collapsed); }}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
           </div>
 
           {/* Navigation */}
           <ScrollArea className="flex-1 py-4">
-            <nav className="px-3 space-y-1">
+            <nav className={cn("space-y-1", collapsed ? "px-2" : "px-3")}>
               {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.to === "/"}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={() => { setSidebarOpen(false); }}
+                  title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      collapsed ? "px-2.5 justify-center" : "px-3",
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
+                  <item.icon className="h-5 w-5 flex-shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
                 </NavLink>
               ))}
             </nav>
@@ -101,26 +134,69 @@ export function Layout() {
           <Separator />
 
           {/* User section */}
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-sm font-medium">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </span>
+          <div className={cn("p-3", collapsed && "lg:p-2")}>
+            {!collapsed ? (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.email}</p>
+                    <p className="text-xs text-muted-foreground">Personal</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <div className="hidden lg:flex flex-col items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                  <span className="text-sm font-medium">
+                    {user?.email?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  onClick={handleLogout}
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-                <p className="text-xs text-muted-foreground">Personal</p>
+            )}
+            {/* Mobile: always show full user section */}
+            <div className="lg:hidden">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                  <span className="text-sm font-medium">
+                    {user?.email?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground">Personal</p>
+                </div>
               </div>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign out
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-foreground"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign out
-            </Button>
           </div>
         </div>
       </aside>
@@ -134,7 +210,10 @@ export function Layout() {
       )}
 
       {/* Main content */}
-      <main className="lg:pl-64 pt-16 lg:pt-0 min-h-screen">
+      <main className={cn(
+        "pt-16 lg:pt-0 min-h-screen transition-all duration-200",
+        collapsed ? "lg:pl-16" : "lg:pl-64"
+      )}>
         <div className="p-6 lg:p-8">
           <Outlet />
         </div>

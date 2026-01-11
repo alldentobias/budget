@@ -11,7 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Asset, assetsApi, Loan, loansApi } from "@/lib/api";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, fromMinorUnits, toMinorUnits } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -151,13 +151,14 @@ export function AssetsPage() {
     const form = e.currentTarget;
     const formData = new FormData(form);
 
+    const manualValueInput = formData.get("manualValue") as string;
     const data = {
       type: formData.get("type") as "stock" | "property" | "cash" | "other",
       name: formData.get("name") as string,
       ticker: (formData.get("ticker") as string) || undefined,
       quantity: parseFloat(formData.get("quantity") as string) || 0,
-      manualValue: formData.get("manualValue")
-        ? parseFloat(formData.get("manualValue") as string)
+      manualValue: manualValueInput
+        ? toMinorUnits(parseFloat(manualValueInput))
         : undefined,
       ownershipPct: parseFloat(formData.get("ownershipPct") as string) || 100,
     };
@@ -177,8 +178,8 @@ export function AssetsPage() {
 
     const data = {
       name: formData.get("name") as string,
-      principal: parseFloat(formData.get("principal") as string),
-      currentBalance: parseFloat(formData.get("currentBalance") as string),
+      principal: toMinorUnits(parseFloat(formData.get("principal") as string)),
+      currentBalance: toMinorUnits(parseFloat(formData.get("currentBalance") as string)),
       interestRate: parseFloat(formData.get("interestRate") as string),
       ownershipPct: parseFloat(formData.get("ownershipPct") as string) || 100,
       notes: (formData.get("notes") as string) || undefined,
@@ -367,7 +368,7 @@ export function AssetsPage() {
                           name="manualValue"
                           type="number"
                           step="0.01"
-                          defaultValue={editingAsset?.manualValue || ""}
+                          defaultValue={editingAsset?.manualValue ? fromMinorUnits(editingAsset.manualValue) : ""}
                           placeholder="0.00"
                         />
                       </div>
@@ -546,7 +547,7 @@ export function AssetsPage() {
                           name="principal"
                           type="number"
                           step="0.01"
-                          defaultValue={editingLoan?.principal}
+                          defaultValue={editingLoan ? fromMinorUnits(editingLoan.principal) : ""}
                           placeholder="0.00"
                           required
                         />
@@ -558,7 +559,7 @@ export function AssetsPage() {
                           name="currentBalance"
                           type="number"
                           step="0.01"
-                          defaultValue={editingLoan?.currentBalance}
+                          defaultValue={editingLoan ? fromMinorUnits(editingLoan.currentBalance) : ""}
                           placeholder="0.00"
                           required
                         />
