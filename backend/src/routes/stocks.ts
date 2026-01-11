@@ -1,33 +1,32 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import yahooFinance from "yahoo-finance2";
 import { authMiddleware } from "../middleware/auth.ts";
+import { fetchQuote, fetchQuotesWithRateLimit } from "../lib/stock-cache.ts";
 
 const stocksRoutes = new Hono();
 stocksRoutes.use("*", authMiddleware);
 
-// Get quote for a single ticker
+// Get quote for a single ticker (uses cache with 15-minute TTL)
 stocksRoutes.get("/quote/:ticker", async (c) => {
   const ticker = c.req.param("ticker");
 
-  try {
-    const quote = await yahooFinance.quote(ticker);
+  const quote = await fetchQuote(ticker);
 
-    return c.json({
-      ticker: quote.symbol,
-      price: quote.regularMarketPrice || 0,
-      change: quote.regularMarketChange || 0,
-      changePercent: quote.regularMarketChangePercent || 0,
-      currency: quote.currency || "USD",
-      name: quote.shortName || quote.longName || ticker,
-    });
-  } catch (error) {
-    console.error(`Error fetching quote for ${ticker}:`, error);
+  if (!quote) {
     return c.json({ message: `Could not fetch quote for ${ticker}` }, 404);
   }
+
+  return c.json({
+    ticker: quote.ticker,
+    price: quote.price,
+    change: quote.change,
+    changePercent: quote.changePercent,
+    currency: quote.currency,
+    name: quote.name,
+  });
 });
 
-// Get quotes for multiple tickers
+// Get quotes for multiple tickers (uses cache with 15-minute TTL, rate-limited)
 stocksRoutes.post("/quotes", async (c) => {
   try {
     const body = await c.req.json();
@@ -35,23 +34,22 @@ stocksRoutes.post("/quotes", async (c) => {
       tickers: z.array(z.string()),
     }).parse(body);
 
-    const quotes = [];
+    // Fetch all quotes with rate limiting
+    const quotesMap = await fetchQuotesWithRateLimit(tickers);
 
-    for (const ticker of tickers) {
-      try {
-        const quote = await yahooFinance.quote(ticker);
-        quotes.push({
-          ticker: quote.symbol,
-          price: quote.regularMarketPrice || 0,
-          change: quote.regularMarketChange || 0,
-          changePercent: quote.regularMarketChangePercent || 0,
-          currency: quote.currency || "USD",
-          name: quote.shortName || quote.longName || ticker,
-        });
-      } catch (error) {
-        console.warn(`Could not fetch quote for ${ticker}:`, error);
-        // Include error entry
-        quotes.push({
+    const quotes = tickers.map((ticker) => {
+      const quote = quotesMap.get(ticker.toUpperCase());
+      if (quote) {
+        return {
+          ticker: quote.ticker,
+          price: quote.price,
+          change: quote.change,
+          changePercent: quote.changePercent,
+          currency: quote.currency,
+          name: quote.name,
+        };
+      } else {
+        return {
           ticker,
           price: 0,
           change: 0,
@@ -59,9 +57,9 @@ stocksRoutes.post("/quotes", async (c) => {
           currency: "USD",
           name: ticker,
           error: true,
-        });
+        };
       }
-    }
+    });
 
     return c.json(quotes);
   } catch (error) {
@@ -74,4 +72,5 @@ stocksRoutes.post("/quotes", async (c) => {
 });
 
 export { stocksRoutes };
+
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { assets, db } from "../db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
-import yahooFinance from "yahoo-finance2";
+import { fetchQuote, fetchQuotesWithRateLimit } from "../lib/stock-cache.ts";
 
 const assetsRoutes = new Hono();
 assetsRoutes.use("*", authMiddleware);
@@ -50,14 +50,12 @@ assetsRoutes.post("/", async (c) => {
     const body = await c.req.json();
     const data = assetSchema.parse(body);
 
-    // If it's a stock with a ticker, fetch current price
+    // If it's a stock with a ticker, fetch current price (uses cache)
     let currentPrice: number | null = null;
     if (data.type === "stock" && data.ticker) {
-      try {
-        const quote = await yahooFinance.quote(data.ticker);
-        currentPrice = priceToMinorUnits(quote.regularMarketPrice);
-      } catch (e) {
-        console.warn(`Could not fetch price for ${data.ticker}:`, e);
+      const quote = await fetchQuote(data.ticker);
+      if (quote) {
+        currentPrice = priceToMinorUnits(quote.price);
       }
     }
 
@@ -112,12 +110,10 @@ assetsRoutes.put("/:id", async (c) => {
     let lastPriceUpdate = existing.lastPriceUpdate;
 
     if (data.ticker && data.ticker !== existing.ticker) {
-      try {
-        const quote = await yahooFinance.quote(data.ticker);
-        currentPrice = priceToMinorUnits(quote.regularMarketPrice);
+      const quote = await fetchQuote(data.ticker);
+      if (quote) {
+        currentPrice = priceToMinorUnits(quote.price);
         lastPriceUpdate = new Date();
-      } catch (e) {
-        console.warn(`Could not fetch price for ${data.ticker}:`, e);
       }
     }
 
@@ -175,7 +171,7 @@ assetsRoutes.delete("/:id", async (c) => {
   return c.body(null, 204);
 });
 
-// Refresh stock prices
+// Refresh stock prices (with rate limiting and caching)
 assetsRoutes.post("/refresh-prices", async (c) => {
   const user = c.get("user");
 
@@ -184,21 +180,24 @@ assetsRoutes.post("/refresh-prices", async (c) => {
   });
 
   const stockAssets = userAssets.filter((a) => a.ticker);
+  const tickers = stockAssets.map((a) => a.ticker!);
 
+  // Fetch all quotes with rate limiting (500ms between requests)
+  const quotes = await fetchQuotesWithRateLimit(tickers);
+
+  // Update assets with fetched prices
   for (const asset of stockAssets) {
     if (!asset.ticker) continue;
 
-    try {
-      const quote = await yahooFinance.quote(asset.ticker);
+    const quote = quotes.get(asset.ticker.toUpperCase());
+    if (quote) {
       await db
         .update(assets)
         .set({
-          currentPrice: priceToMinorUnits(quote.regularMarketPrice),
+          currentPrice: priceToMinorUnits(quote.price),
           lastPriceUpdate: new Date(),
         })
         .where(eq(assets.id, asset.id));
-    } catch (e) {
-      console.warn(`Could not fetch price for ${asset.ticker}:`, e);
     }
   }
 
