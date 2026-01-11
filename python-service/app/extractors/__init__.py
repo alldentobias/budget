@@ -39,7 +39,24 @@ def run_extractor(name: str, file_content: bytes, filename: str) -> list[Extract
     if name not in EXTRACTORS:
         raise ValueError(f"Unknown extractor: {name}. Available: {list(EXTRACTORS.keys())}")
 
-    return EXTRACTORS[name]["function"](file_content, filename)
+    transactions = EXTRACTORS[name]["function"](file_content, filename)
+    
+    # Sort by date and assign sortIndex
+    sorted_transactions = sorted(transactions, key=lambda t: t.date)
+    
+    return [
+        ExtractedTransaction(
+            date=t.date,
+            title=t.title,
+            amount=t.amount,
+            sortIndex=i,
+            source=t.source,
+            description=t.description,
+            isShared=t.isShared,
+            raw_data=t.raw_data,
+        )
+        for i, t in enumerate(sorted_transactions)
+    ]
 
 
 # Import all extractor modules to register them
