@@ -65,6 +65,41 @@ case "${1:-help}" in
     shell-backend)
         docker compose -f $COMPOSE_FILE exec backend sh
         ;;
+    migrate)
+        echo "Running database migrations..."
+        
+        # Create migrations tracking table if it doesn't exist
+        docker compose -f $COMPOSE_FILE exec -T postgres psql -U budget -d budget -c "
+            CREATE TABLE IF NOT EXISTS _migrations (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                applied_at TIMESTAMP DEFAULT NOW() NOT NULL
+            );
+        "
+        
+        # Run each migration file
+        for migration in scripts/migrations/*.sql; do
+            if [ -f "$migration" ]; then
+                migration_name=$(basename "$migration")
+                
+                # Check if already applied
+                applied=$(docker compose -f $COMPOSE_FILE exec -T postgres psql -U budget -d budget -tAc \
+                    "SELECT COUNT(*) FROM _migrations WHERE name = '$migration_name'")
+                
+                if [ "$applied" = "0" ]; then
+                    echo "Applying: $migration_name"
+                    docker compose -f $COMPOSE_FILE exec -T postgres psql -U budget -d budget < "$migration"
+                    docker compose -f $COMPOSE_FILE exec -T postgres psql -U budget -d budget -c \
+                        "INSERT INTO _migrations (name) VALUES ('$migration_name')"
+                    echo "  ✓ Applied"
+                else
+                    echo "  Skipping: $migration_name (already applied)"
+                fi
+            fi
+        done
+        
+        echo "Migrations complete!"
+        ;;
     cleanup)
         echo "Cleaning up old Docker images..."
         docker system prune -af
@@ -83,11 +118,13 @@ case "${1:-help}" in
         echo "  update      Pull latest code and rebuild"
         echo "  backup      Create database backup"
         echo "  restore     Restore database from backup"
+        echo "  migrate     Run pending database migrations"
         echo "  shell-db    Open PostgreSQL shell"
         echo "  shell-backend  Open backend shell"
         echo "  cleanup     Remove old Docker images"
         echo ""
         ;;
 esac
+
 
 

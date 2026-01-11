@@ -158,7 +158,16 @@ docker compose -f docker-compose.hetzner.yml logs -f postgres
 ```bash
 cd /opt/budget
 git pull
+./deploy/manage.sh migrate  # Run any new database migrations
 docker compose -f docker-compose.hetzner.yml up -d --build
+```
+
+Or use the management script:
+
+```bash
+cd /opt/budget
+./deploy/manage.sh update
+./deploy/manage.sh migrate
 ```
 
 ### Restart Services
@@ -286,5 +295,6 @@ docker compose -f docker-compose.hetzner.yml logs postgres
 - [ ] Firewall configured (Hetzner Console)
 - [ ] Regular system updates scheduled
 - [ ] Verified backups are working
+
 
 

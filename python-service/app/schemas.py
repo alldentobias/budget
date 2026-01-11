@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import date
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class ExtractedTransaction(BaseModel):
@@ -8,17 +9,17 @@ class ExtractedTransaction(BaseModel):
     date: str  # ISO format date string
     title: str
     amount: int  # Amount in minor units (øre/cents), e.g., 1250 = 12.50 kr
-    source: Optional[str] = None
-    description: Optional[str] = None
-    isShared: Optional[bool] = False
-    raw_data: Optional[str] = None  # Original row data for reference
-    
+    source: str | None = None
+    description: str | None = None
+    isShared: bool | None = False
+    raw_data: str | None = None  # Original row data for reference
+
 
 class ExtractionResponse(BaseModel):
     """Response from the extraction endpoint"""
     success: bool
     message: str
-    transactions: List[ExtractedTransaction]
+    transactions: list[ExtractedTransaction]
     extractor_used: str
 
 
@@ -26,4 +27,4 @@ class ExtractorInfo(BaseModel):
     """Information about an available extractor"""
     name: str
     description: str
-    supported_formats: List[str]
+    supported_formats: list[str]

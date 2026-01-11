@@ -1,13 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List
-import pandas as pd
-import io
 import importlib
+import io
 import os
+from typing import List
 
-from app.schemas import ExtractedTransaction, ExtractionResponse
+import pandas as pd
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.extractors import get_available_extractors, run_extractor
+from app.schemas import ExtractedTransaction, ExtractionResponse
 
 app = FastAPI(
     title="Budget Extractor Service",
@@ -49,24 +50,24 @@ async def extract_transactions(
     try:
         # Read file content
         content = await file.read()
-        
+
         # Determine file type
         filename = file.filename or "unknown"
-        
+
         # Run the extractor
         transactions = run_extractor(extractor, content, filename)
-        
+
         return ExtractionResponse(
             success=True,
             message=f"Successfully extracted {len(transactions)} transactions",
             transactions=transactions,
             extractor_used=extractor
         )
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e!s}")
 
 
 @app.post("/preview")
@@ -77,7 +78,7 @@ async def preview_file(file: UploadFile = File(...)):
     try:
         content = await file.read()
         filename = file.filename or "unknown"
-        
+
         # Try to read as CSV first, then Excel
         try:
             if filename.endswith(('.xlsx', '.xls')):
@@ -87,15 +88,16 @@ async def preview_file(file: UploadFile = File(...)):
         except Exception:
             # Try with different encodings
             df = pd.read_csv(io.BytesIO(content), nrows=10, encoding='latin-1')
-        
+
         return {
             "columns": list(df.columns),
             "rows": df.head(5).to_dict(orient="records"),
             "total_preview_rows": len(df)
         }
-        
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not preview file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Could not preview file: {e!s}")
+
 
 
 

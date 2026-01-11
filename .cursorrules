@@ -1,0 +1,94 @@
+# Budget App - Cursor Rules
+
+## Project Overview
+This is a personal budgeting application with:
+- **Frontend**: React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui
+- **Backend**: Deno + Hono + Drizzle ORM + PostgreSQL
+- **Python Service**: FastAPI + pandas for bank data extraction
+
+## Code Style & Best Practices
+
+### TypeScript/React (Frontend)
+- Use functional components with hooks
+- Prefer `const` over `let`, never use `var`
+- Use TypeScript strict mode - no `any` types without justification
+- Use React Query (TanStack Query) for data fetching
+- Colocate component styles using Tailwind classes
+- Use shadcn/ui components - don't reinvent UI primitives
+- Extract reusable logic into custom hooks in `/hooks`
+- Keep components small and focused (< 200 lines ideally)
+- Use absolute imports with `@/` prefix
+- Format: 2-space indentation, no semicolons optional but be consistent
+- All monetary amounts in frontend are in **major units** (kr, not øre)
+
+### Deno/TypeScript (Backend)
+- Use Deno's native TypeScript support
+- Prefer Deno standard library over npm packages when available
+- Use `Hono` for routing - keep route files focused
+- Use Zod for request validation
+- Use Drizzle ORM with type-safe queries
+- All monetary amounts stored as **integers in minor units** (øre/cents)
+- Convert to/from minor units at API boundaries
+- Handle errors with proper HTTP status codes
+- Use async/await, avoid callbacks
+- Keep middleware thin and reusable
+- Test with Deno's built-in test runner
+
+### Python (Extraction Service)
+- Use Python 3.11+ features
+- Type hints for all function signatures
+- Use Pydantic for data validation and schemas
+- Use pandas for data manipulation
+- Follow PEP 8 style guide
+- Keep extractors modular - one function per bank format
+- Use pytest for testing
+- Docstrings for public functions
+
+## File Organization
+```
+backend/src/
+├── db/           # Database schema and connection
+├── middleware/   # Auth and other middleware
+├── routes/       # API route handlers
+└── tests/        # Test files
+
+frontend/src/
+├── components/   # Reusable UI components
+├── hooks/        # Custom React hooks
+├── lib/          # Utilities, API client, auth
+└── pages/        # Page components
+
+python-service/app/
+├── extractors/   # Bank-specific extractors
+├── schemas.py    # Pydantic models
+└── main.py       # FastAPI app
+```
+
+## Database Conventions
+- All monetary values stored as BIGINT (minor units × 100)
+- UUIDs for primary keys
+- snake_case for column names
+- Timestamps use `created_at` pattern
+- Foreign keys with ON DELETE CASCADE or SET NULL as appropriate
+
+## API Conventions
+- RESTful endpoints under `/api`
+- JSON request/response bodies
+- Authentication via httpOnly JWT cookies
+- Monetary amounts in responses are **major units** (converted from DB)
+- Monetary amounts in requests should be **minor units** (integers)
+
+## Security
+- Registration disabled by default (ALLOW_REGISTRATION=false)
+- JWT tokens with 7-day expiry
+- Passwords hashed with bcrypt (cost 10)
+- User data isolated by user_id in all queries
+
+## Before Committing
+1. Run `deno check src/main.ts` in backend
+2. Run `npm run build` in frontend (includes type checking)
+3. Run `pytest` in python-service
+4. Ensure no unused imports or variables
+5. Test the feature manually if UI changes
+
+

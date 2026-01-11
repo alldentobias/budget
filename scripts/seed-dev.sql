@@ -65,3 +65,4 @@ FROM categories c
 WHERE c.user_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AND c.name = 'Food & Dining'
 ON CONFLICT DO NOTHING;
 
+

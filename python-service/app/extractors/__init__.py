@@ -1,15 +1,15 @@
-from typing import List, Dict, Any
-import pandas as pd
 import io
+from typing import Any, Dict, List
+
+import pandas as pd
 
 from app.schemas import ExtractedTransaction
 
-
 # Registry of available extractors
-EXTRACTORS: Dict[str, Dict[str, Any]] = {}
+EXTRACTORS: dict[str, dict[str, Any]] = {}
 
 
-def register_extractor(name: str, description: str, formats: List[str]):
+def register_extractor(name: str, description: str, formats: list[str]):
     """Decorator to register an extractor function"""
     def decorator(func):
         EXTRACTORS[name] = {
@@ -22,7 +22,7 @@ def register_extractor(name: str, description: str, formats: List[str]):
     return decorator
 
 
-def get_available_extractors() -> List[Dict[str, str]]:
+def get_available_extractors() -> list[dict[str, str]]:
     """Get list of all registered extractors"""
     return [
         {
@@ -34,11 +34,11 @@ def get_available_extractors() -> List[Dict[str, str]]:
     ]
 
 
-def run_extractor(name: str, file_content: bytes, filename: str) -> List[ExtractedTransaction]:
+def run_extractor(name: str, file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """Run a specific extractor on the file content"""
     if name not in EXTRACTORS:
         raise ValueError(f"Unknown extractor: {name}. Available: {list(EXTRACTORS.keys())}")
-    
+
     return EXTRACTORS[name]["function"](file_content, filename)
 
 

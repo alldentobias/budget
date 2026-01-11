@@ -1,0 +1,67 @@
+[project]
+name = "budget-python-service"
+version = "1.0.0"
+description = "Bank data extraction service for Budget App"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E402",   # module level import not at top (needed for dynamic imports)
+    "E712",   # comparison to True/False (allow for clarity in tests)
+    "E722",   # bare except (sometimes needed)
+    "B008",   # do not perform function calls in argument defaults (needed for FastAPI)
+    "B904",   # raise from inside except
+    "F401",   # unused import (might be intentional re-exports)
+    "F403",   # star imports (needed for extractor registry)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG", "E712"]  # Unused arguments and True/False comparisons OK in tests
+"app/extractors/*.py" = ["ARG001"]  # Unused filename arg OK (interface requirement)
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = ["pandas.*", "numpy.*", "openpyxl.*"]
+ignore_missing_imports = true
+

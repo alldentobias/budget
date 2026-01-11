@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { categories, db, expenses } from "../db/index.ts";
-import { and, eq, sql } from "drizzle-orm";
+import { db, expenses } from "../db/index.ts";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const expensesRoutes = new Hono();

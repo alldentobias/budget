@@ -9,3 +9,4 @@ export default {
       "postgres://budget:budget_secret@localhost:5432/budget",
   },
 } satisfies Config;
+

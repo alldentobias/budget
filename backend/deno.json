@@ -2,7 +2,12 @@
   "tasks": {
     "dev": "deno run --watch --allow-net --allow-env --allow-read --allow-write src/main.ts",
     "start": "deno run --allow-net --allow-env --allow-read --allow-write src/main.ts",
-    "test": "deno test --allow-env --allow-read src/tests/",
+    "test": "deno test --allow-env --allow-read --allow-net src/tests/",
+    "check": "deno check src/main.ts",
+    "lint": "deno lint src/",
+    "fmt": "deno fmt src/",
+    "fmt:check": "deno fmt --check src/",
+    "validate": "deno task check && deno task lint && deno task fmt:check",
     "db:generate": "deno run -A npm:drizzle-kit generate",
     "db:migrate": "deno run -A npm:drizzle-kit migrate",
     "db:push": "deno run -A npm:drizzle-kit push",
@@ -20,6 +25,31 @@
     "@std/": "https://deno.land/std@0.210.0/"
   },
   "compilerOptions": {
-    "lib": ["deno.window"]
+    "lib": ["deno.window"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "lint": {
+    "include": ["src/"],
+    "rules": {
+      "tags": ["recommended"],
+      "include": [
+        "ban-untagged-todo",
+        "no-unused-vars",
+        "no-explicit-any",
+        "explicit-function-return-type"
+      ],
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "fmt": {
+    "include": ["src/"],
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": false
   }
 }

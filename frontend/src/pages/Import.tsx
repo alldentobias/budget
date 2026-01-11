@@ -112,8 +112,31 @@ export function ImportPage() {
         update: Parameters<typeof importApi.updateStaged>[1];
       },
     ) => importApi.updateStaged(id, update),
-    onSuccess: () => {
-      refetchStaged();
+    onMutate: async ({ id, update }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["staged-expenses", targetYearMonth] });
+      
+      // Snapshot the previous value
+      const previousStaged = queryClient.getQueryData(["staged-expenses", targetYearMonth]);
+      
+      // Optimistically update the cache
+      queryClient.setQueryData(
+        ["staged-expenses", targetYearMonth],
+        (old: typeof stagedExpenses) => 
+          old?.map((s) => s.id === id ? { ...s, ...update } : s)
+      );
+      
+      return { previousStaged };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback on error
+      if (context?.previousStaged) {
+        queryClient.setQueryData(["staged-expenses", targetYearMonth], context.previousStaged);
+      }
+    },
+    onSettled: () => {
+      // Refetch after mutation settles to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["staged-expenses", targetYearMonth] });
     },
   });
 

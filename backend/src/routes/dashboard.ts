@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import {
   assets,
-  categories,
   db,
   expenses,
   incomes,
@@ -32,7 +31,6 @@ dashboardRoutes.get("/summary", async (c) => {
     userLoans,
     monthlyExpenses,
     monthlyIncomes,
-    userCategories,
   ] = await Promise.all([
     db.query.assets.findMany({
       where: eq(assets.userId, user.id),
@@ -52,9 +50,6 @@ dashboardRoutes.get("/summary", async (c) => {
         eq(incomes.userId, user.id),
         eq(incomes.yearMonth, currentYearMonth),
       ),
-    }),
-    db.query.categories.findMany({
-      where: eq(categories.userId, user.id),
     }),
   ]);
 

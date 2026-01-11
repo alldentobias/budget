@@ -96,7 +96,8 @@ importRoutes.post("/upload", async (c) => {
     let filteredCount = result.transactions.length - transactions.length;
     const staged = [];
 
-    for (const tx of transactions) {
+    for (let i = 0; i < transactions.length; i++) {
+      const tx = transactions[i];
       // Use target yearMonth if provided, otherwise calculate from date
       const yearMonth = targetYearMonth || dateToYearMonth(tx.date);
 
@@ -133,6 +134,7 @@ importRoutes.post("/upload", async (c) => {
           collectToMe: 0,
           collectFromMe: 0,
           notes: null,
+          sortIndex: i, // Preserve original file order
         })
         .returning();
 
@@ -169,7 +171,8 @@ importRoutes.get("/staged", async (c) => {
     with: {
       category: true,
     },
-    orderBy: (stagedExpenses, { desc }) => [desc(stagedExpenses.date)],
+    // Sort by sortIndex to preserve original file order
+    orderBy: (stagedExpenses, { asc }) => [asc(stagedExpenses.sortIndex)],
   });
 
   // With bigint mode: "number", amounts come back as actual numbers

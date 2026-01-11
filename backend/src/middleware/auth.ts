@@ -30,7 +30,7 @@ declare module "hono" {
   }
 }
 
-export async function authMiddleware(c: Context, next: Next) {
+export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
   try {
     // Try to get token from cookie first, then Authorization header
     let token = getCookie(c, "auth_token");

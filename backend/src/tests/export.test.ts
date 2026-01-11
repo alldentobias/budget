@@ -299,3 +299,4 @@ Deno.test("CSV Round-trip - Data integrity", () => {
   assertEquals(parseFloat(fields[2]), originalExpense.amount);
   assertEquals(fields[3], originalExpense.category);
 });
+

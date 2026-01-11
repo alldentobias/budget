@@ -79,3 +79,4 @@ echo ""
 echo "🔐 Your secrets are stored in $APP_DIR/.env"
 
 
+

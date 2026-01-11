@@ -79,6 +79,7 @@ export const stagedExpenses = pgTable("staged_expenses", {
     .notNull(),
   yearMonth: integer("year_month").notNull(),
   notes: text("notes"),
+  sortIndex: integer("sort_index").default(0).notNull(), // Preserves original file order
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
