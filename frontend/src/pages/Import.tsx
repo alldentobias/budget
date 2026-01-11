@@ -69,15 +69,15 @@ export function ImportPage() {
     queryFn: categoriesApi.getAll,
   });
 
-  // Check for existing staged expenses (even on upload step)
-  const { data: existingStagedCount = 0 } = useQuery({
-    queryKey: ["staged-expenses-count", targetYearMonth],
-    queryFn: async () => {
-      const staged = await importApi.getStaged(targetYearMonth);
-      return staged.length;
-    },
+  // Check for existing staged expenses across all months (even on upload step)
+  const { data: stagedSummary = [] } = useQuery({
+    queryKey: ["staged-expenses-summary"],
+    queryFn: importApi.getStagedSummary,
     enabled: step === "upload",
   });
+
+  // Find if there are staged expenses for any month
+  const existingStaged = stagedSummary.length > 0 ? stagedSummary[0] : null;
 
   const { data: stagedExpenses = [], refetch: refetchStaged } = useQuery({
     queryKey: ["staged-expenses", targetYearMonth],
@@ -167,10 +167,10 @@ export function ImportPage() {
   });
 
   const clearStagedMutation = useMutation({
-    mutationFn: () => importApi.clearStaged(targetYearMonth),
+    mutationFn: (yearMonth: number) => importApi.clearStaged(yearMonth),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staged-expenses-count", targetYearMonth] });
-      queryClient.invalidateQueries({ queryKey: ["staged-expenses", targetYearMonth] });
+      queryClient.invalidateQueries({ queryKey: ["staged-expenses-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["staged-expenses"] });
       toast({ title: "Cleared staged expenses" });
     },
   });
@@ -370,7 +370,7 @@ export function ImportPage() {
       {step === "upload" && (
         <div className="space-y-6">
           {/* Existing staged expenses prompt */}
-          {existingStagedCount > 0 && (
+          {existingStaged && (
             <Card className="border-primary/50 bg-primary/5">
               <CardContent className="py-6">
                 <div className="flex items-start gap-4">
@@ -379,19 +379,22 @@ export function ImportPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">
-                      You have {existingStagedCount} staged transaction{existingStagedCount !== 1 ? "s" : ""}
+                      You have {existingStaged.count} staged transaction{existingStaged.count !== 1 ? "s" : ""}
                     </h3>
                     <p className="text-muted-foreground mt-1">
-                      There are already staged transactions for {getMonthName(month)} {year}.
+                      There are staged transactions for {getMonthName(existingStaged.yearMonth % 100)} {Math.floor(existingStaged.yearMonth / 100)}.
                       Would you like to continue reviewing them or start fresh?
                     </p>
                     <div className="flex gap-3 mt-4">
-                      <Button onClick={() => { setStep("review"); }}>
+                      <Button onClick={() => { 
+                        setTargetYearMonth(existingStaged.yearMonth);
+                        setStep("review"); 
+                      }}>
                         Continue reviewing
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => { clearStagedMutation.mutate(); }}
+                        onClick={() => { clearStagedMutation.mutate(existingStaged.yearMonth); }}
                         disabled={clearStagedMutation.isPending}
                       >
                         {clearStagedMutation.isPending ? "Clearing..." : "Start fresh"}
