@@ -51,11 +51,12 @@ assetsRoutes.post("/", async (c) => {
     const data = assetSchema.parse(body);
 
     // If it's a stock with a ticker, fetch current price (uses cache)
+    // Price is automatically converted to NOK
     let currentPrice: number | null = null;
     if (data.type === "stock" && data.ticker) {
       const quote = await fetchQuote(data.ticker);
       if (quote) {
-        currentPrice = priceToMinorUnits(quote.price);
+        currentPrice = priceToMinorUnits(quote.priceInBaseCurrency);
       }
     }
 
@@ -112,7 +113,8 @@ assetsRoutes.put("/:id", async (c) => {
     if (data.ticker && data.ticker !== existing.ticker) {
       const quote = await fetchQuote(data.ticker);
       if (quote) {
-        currentPrice = priceToMinorUnits(quote.price);
+        // Price is automatically converted to NOK
+        currentPrice = priceToMinorUnits(quote.priceInBaseCurrency);
         lastPriceUpdate = new Date();
       }
     }
@@ -185,7 +187,7 @@ assetsRoutes.post("/refresh-prices", async (c) => {
   // Fetch all quotes with rate limiting (500ms between requests)
   const quotes = await fetchQuotesWithRateLimit(tickers);
 
-  // Update assets with fetched prices
+  // Update assets with fetched prices (converted to NOK)
   for (const asset of stockAssets) {
     if (!asset.ticker) continue;
 
@@ -194,7 +196,7 @@ assetsRoutes.post("/refresh-prices", async (c) => {
       await db
         .update(assets)
         .set({
-          currentPrice: priceToMinorUnits(quote.price),
+          currentPrice: priceToMinorUnits(quote.priceInBaseCurrency),
           lastPriceUpdate: new Date(),
         })
         .where(eq(assets.id, asset.id));

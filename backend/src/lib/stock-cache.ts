@@ -3,9 +3,13 @@ import YahooFinance from "yahoo-finance2";
 // Initialize Yahoo Finance v3 client
 const yahooFinance = new YahooFinance();
 
+// Base currency for the app (all values converted to this)
+const BASE_CURRENCY = "NOK";
+
 interface CachedQuote {
   ticker: string;
   price: number;
+  priceInBaseCurrency: number; // Price converted to NOK
   change: number;
   changePercent: number;
   currency: string;
@@ -13,8 +17,18 @@ interface CachedQuote {
   fetchedAt: number;
 }
 
+interface CachedExchangeRate {
+  from: string;
+  to: string;
+  rate: number;
+  fetchedAt: number;
+}
+
 // In-memory cache for stock quotes
 const quoteCache = new Map<string, CachedQuote>();
+
+// In-memory cache for exchange rates
+const exchangeRateCache = new Map<string, CachedExchangeRate>();
 
 // Cache TTL: 24 hours
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -27,6 +41,96 @@ const REQUEST_DELAY_MS = 500;
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Get FX pair symbol for Yahoo Finance (e.g., "USDNOK=X")
+ */
+function getFxSymbol(from: string, to: string): string {
+  return `${from.toUpperCase()}${to.toUpperCase()}=X`;
+}
+
+/**
+ * Get a cached exchange rate if it exists and is still valid
+ */
+function getCachedExchangeRate(from: string, to: string): number | null {
+  // Same currency = rate of 1
+  if (from.toUpperCase() === to.toUpperCase()) {
+    return 1;
+  }
+
+  const key = `${from.toUpperCase()}-${to.toUpperCase()}`;
+  const cached = exchangeRateCache.get(key);
+  if (!cached) return null;
+
+  const age = Date.now() - cached.fetchedAt;
+  if (age > CACHE_TTL_MS) {
+    exchangeRateCache.delete(key);
+    return null;
+  }
+
+  return cached.rate;
+}
+
+/**
+ * Fetch exchange rate from Yahoo Finance
+ */
+async function fetchExchangeRate(from: string, to: string): Promise<number> {
+  const fromUpper = from.toUpperCase();
+  const toUpper = to.toUpperCase();
+
+  // Same currency = rate of 1
+  if (fromUpper === toUpper) {
+    return 1;
+  }
+
+  // Check cache first
+  const cached = getCachedExchangeRate(fromUpper, toUpper);
+  if (cached !== null) {
+    console.log(`[StockCache] FX cache hit for ${fromUpper}/${toUpper}: ${cached}`);
+    return cached;
+  }
+
+  try {
+    const symbol = getFxSymbol(fromUpper, toUpper);
+    console.log(`[StockCache] Fetching FX rate ${symbol}`);
+    const quote = await yahooFinance.quote(symbol);
+    const rate = quote.regularMarketPrice || 1;
+
+    // Cache the rate
+    const key = `${fromUpper}-${toUpper}`;
+    exchangeRateCache.set(key, {
+      from: fromUpper,
+      to: toUpper,
+      rate,
+      fetchedAt: Date.now(),
+    });
+
+    console.log(`[StockCache] FX rate ${fromUpper}/${toUpper}: ${rate}`);
+    return rate;
+  } catch (error) {
+    console.warn(`[StockCache] Failed to fetch FX rate ${fromUpper}/${toUpper}:`, error);
+    // Return 1 as fallback (no conversion)
+    return 1;
+  }
+}
+
+/**
+ * Convert a price from one currency to base currency (NOK)
+ */
+export async function convertToBaseCurrency(
+  amount: number,
+  fromCurrency: string,
+): Promise<number> {
+  const rate = await fetchExchangeRate(fromCurrency, BASE_CURRENCY);
+  return amount * rate;
+}
+
+/**
+ * Get the current base currency
+ */
+export function getBaseCurrency(): string {
+  return BASE_CURRENCY;
 }
 
 /**
@@ -47,6 +151,7 @@ export function getCachedQuote(ticker: string): CachedQuote | null {
 
 /**
  * Fetch a single stock quote with caching
+ * Automatically converts price to base currency (NOK)
  */
 export async function fetchQuote(ticker: string): Promise<CachedQuote | null> {
   const normalizedTicker = ticker.toUpperCase();
@@ -63,12 +168,20 @@ export async function fetchQuote(ticker: string): Promise<CachedQuote | null> {
     console.log(`[StockCache] Fetching ${normalizedTicker} from Yahoo Finance`);
     const quote = await yahooFinance.quote(normalizedTicker);
 
+    const price = quote.regularMarketPrice || 0;
+    const currency = quote.currency || "USD";
+
+    // Convert price to base currency (NOK)
+    await sleep(REQUEST_DELAY_MS); // Rate limit before FX call
+    const priceInBaseCurrency = await convertToBaseCurrency(price, currency);
+
     const cachedQuote: CachedQuote = {
       ticker: quote.symbol || normalizedTicker,
-      price: quote.regularMarketPrice || 0,
+      price,
+      priceInBaseCurrency,
       change: quote.regularMarketChange || 0,
       changePercent: quote.regularMarketChangePercent || 0,
-      currency: quote.currency || "USD",
+      currency,
       name: quote.shortName || quote.longName || normalizedTicker,
       fetchedAt: Date.now(),
     };
@@ -124,15 +237,25 @@ export async function fetchQuotesWithRateLimit(
  */
 export function clearCache(): void {
   quoteCache.clear();
+  exchangeRateCache.clear();
 }
 
 /**
  * Get cache stats
  */
-export function getCacheStats(): { size: number; entries: string[] } {
+export function getCacheStats(): {
+  quotes: { size: number; entries: string[] };
+  exchangeRates: { size: number; entries: string[] };
+} {
   return {
-    size: quoteCache.size,
-    entries: Array.from(quoteCache.keys()),
+    quotes: {
+      size: quoteCache.size,
+      entries: Array.from(quoteCache.keys()),
+    },
+    exchangeRates: {
+      size: exchangeRateCache.size,
+      entries: Array.from(exchangeRateCache.keys()),
+    },
   };
 }
 

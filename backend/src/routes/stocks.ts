@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.ts";
-import { fetchQuote, fetchQuotesWithRateLimit } from "../lib/stock-cache.ts";
+import {
+  fetchQuote,
+  fetchQuotesWithRateLimit,
+  getBaseCurrency,
+} from "../lib/stock-cache.ts";
 
 const stocksRoutes = new Hono();
 stocksRoutes.use("*", authMiddleware);
@@ -19,6 +23,8 @@ stocksRoutes.get("/quote/:ticker", async (c) => {
   return c.json({
     ticker: quote.ticker,
     price: quote.price,
+    priceInBaseCurrency: quote.priceInBaseCurrency,
+    baseCurrency: getBaseCurrency(),
     change: quote.change,
     changePercent: quote.changePercent,
     currency: quote.currency,
@@ -37,12 +43,15 @@ stocksRoutes.post("/quotes", async (c) => {
     // Fetch all quotes with rate limiting
     const quotesMap = await fetchQuotesWithRateLimit(tickers);
 
+    const baseCurrency = getBaseCurrency();
     const quotes = tickers.map((ticker) => {
       const quote = quotesMap.get(ticker.toUpperCase());
       if (quote) {
         return {
           ticker: quote.ticker,
           price: quote.price,
+          priceInBaseCurrency: quote.priceInBaseCurrency,
+          baseCurrency,
           change: quote.change,
           changePercent: quote.changePercent,
           currency: quote.currency,
@@ -52,6 +61,8 @@ stocksRoutes.post("/quotes", async (c) => {
         return {
           ticker,
           price: 0,
+          priceInBaseCurrency: 0,
+          baseCurrency,
           change: 0,
           changePercent: 0,
           currency: "USD",
