@@ -1,4 +1,7 @@
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+
+// Initialize Yahoo Finance v3 client
+const yahooFinance = new YahooFinance();
 
 interface CachedQuote {
   ticker: string;

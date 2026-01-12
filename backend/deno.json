@@ -21,7 +21,7 @@
     "bcrypt": "https://deno.land/x/bcrypt@v0.4.1/mod.ts",
     "djwt": "https://deno.land/x/djwt@v3.0.1/mod.ts",
     "zod": "npm:zod@^3.22.0",
-    "yahoo-finance2": "npm:yahoo-finance2@^2.9.0",
+    "yahoo-finance2": "npm:yahoo-finance2@^3.0.0",
     "@std/": "https://deno.land/std@0.210.0/"
   },
   "compilerOptions": {
