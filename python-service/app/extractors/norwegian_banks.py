@@ -90,6 +90,23 @@ def extract_dnb_mastercard(file_content: bytes, filename: str) -> list[Extracted
     return transactions
 
 
+def parse_amex_date(date_val) -> str:
+    """Parse AMEX date format (mm/dd/yyyy) to YYYY-MM-DD"""
+    if pd.isna(date_val):
+        return datetime.now().strftime("%Y-%m-%d")
+    if isinstance(date_val, str):
+        # AMEX uses US format: mm/dd/yyyy
+        try:
+            return datetime.strptime(date_val, "%m/%d/%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+        # Fallback to generic parsing
+        return parse_date(date_val)
+    if hasattr(date_val, 'strftime'):
+        return date_val.strftime("%Y-%m-%d")
+    return str(date_val)
+
+
 @register_extractor(
     name="amex_norway",
     description="American Express Norway (aktivitet.xlsx)",
@@ -100,6 +117,7 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
     Extract transactions from American Express Norway export.
     Header is at row 6 (0-indexed: header=6)
     Columns: Dato, Beskrivelse, Beløp
+    Date format: mm/dd/yyyy (US format)
     """
     df = pd.read_excel(io.BytesIO(file_content), header=6)
 
@@ -115,7 +133,7 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
     transactions = []
     for _, row in df.iterrows():
         transactions.append(ExtractedTransaction(
-            date=parse_date(row["Dato"]),
+            date=parse_amex_date(row["Dato"]),
             title=str(row["Beskrivelse"]).strip(),
             amount=parse_norwegian_amount(row["Beløp"]),
             source="Amex",
