@@ -14,11 +14,29 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./scripts/seed-dev.sql:/docker-entrypoint-initdb.d/02-seed-dev.sql
+      - ./scripts/migrations:/migrations
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U budget"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  migrations:
+    image: postgres:16-alpine
+    container_name: budget-migrations
+    environment:
+      PGHOST: postgres
+      PGUSER: budget
+      PGPASSWORD: budget_secret
+      PGDATABASE: budget
+    volumes:
+      - ./scripts/migrations:/migrations:ro
+      - ./scripts/run-migrations.sh:/run-migrations.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sh", "/run-migrations.sh"]
+    restart: "no"
 
   backend:
     build:
@@ -34,6 +52,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads

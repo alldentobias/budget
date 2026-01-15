@@ -182,6 +182,55 @@ export function MonthlyPage() {
     },
   });
 
+  const createExpenseMutation = useMutation({
+    mutationFn: expensesApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["expenses", currentYearMonth],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["expense-stats", currentYearMonth],
+      });
+      setShowExpenseDialog(false);
+      setEditingExpense(null);
+      toast({ title: "Expense added" });
+    },
+    onError: (error) => {
+      console.error("Create expense error:", error);
+      toast({ title: "Failed to create expense", variant: "destructive" });
+    },
+  });
+
+  // Handler for adding a new expense
+  const handleAddExpense = () => {
+    setEditingExpense(null);
+    // Get today's date in YYYY-MM-DD format, but within the current month
+    const today = new Date();
+    const currentMonthStart = new Date(year, month - 1, 1);
+    const currentMonthEnd = new Date(year, month, 0);
+    let defaultDate: Date;
+    if (today >= currentMonthStart && today <= currentMonthEnd) {
+      defaultDate = today;
+    } else {
+      // Default to first day of the selected month
+      defaultDate = currentMonthStart;
+    }
+    const dateStr = defaultDate.toISOString().split("T")[0];
+
+    setEditForm({
+      title: "",
+      date: dateStr,
+      amount: 0,
+      categoryId: "",
+      notes: "",
+      isShared: false,
+      collectToMe: 0,
+      collectFromMe: 0,
+      settled: false,
+    });
+    setShowExpenseDialog(true);
+  };
+
   // Handler for editing an expense (convert from minor to major units for display)
   const handleEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
@@ -202,7 +251,24 @@ export function MonthlyPage() {
   };
 
   const handleSaveExpense = () => {
-    if (!editingExpense) return;
+    // Validate required fields
+    if (!editForm.title.trim()) {
+      toast({
+        title: "Title required",
+        description: "Please enter a title for the expense",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!editForm.amount || editForm.amount <= 0) {
+      toast({
+        title: "Amount required",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Validate settlement amounts (in major units)
     const totalSettlement = editForm.collectToMe + editForm.collectFromMe;
@@ -218,26 +284,35 @@ export function MonthlyPage() {
     }
 
     // Convert from major units to minor units for API
-    updateExpenseMutation.mutate({
-      id: editingExpense.id,
-      data: {
-        title: editForm.title,
-        date: editForm.date,
-        amount: toMinorUnits(editForm.amount),
-        categoryId: editForm.categoryId || undefined,
-        notes: editForm.notes || undefined,
-        isShared: editForm.isShared,
-        collectToMe: toMinorUnits(editForm.collectToMe),
-        collectFromMe: toMinorUnits(editForm.collectFromMe),
-        settled: editForm.settled,
-      },
-    }, {
-      onSuccess: () => {
-        setShowExpenseDialog(false);
-        setEditingExpense(null);
-        toast({ title: "Expense updated" });
-      },
-    });
+    const expenseData = {
+      title: editForm.title,
+      date: editForm.date,
+      amount: toMinorUnits(editForm.amount),
+      categoryId: editForm.categoryId || undefined,
+      notes: editForm.notes || undefined,
+      isShared: editForm.isShared,
+      collectToMe: toMinorUnits(editForm.collectToMe),
+      collectFromMe: toMinorUnits(editForm.collectFromMe),
+      settled: editForm.settled,
+      yearMonth: currentYearMonth,
+    };
+
+    if (editingExpense) {
+      // Update existing expense
+      updateExpenseMutation.mutate({
+        id: editingExpense.id,
+        data: expenseData,
+      }, {
+        onSuccess: () => {
+          setShowExpenseDialog(false);
+          setEditingExpense(null);
+          toast({ title: "Expense updated" });
+        },
+      });
+    } else {
+      // Create new expense
+      createExpenseMutation.mutate(expenseData);
+    }
   };
 
   // Calculate if settlement exceeds amount (for showing warning) - in major units
@@ -430,6 +505,10 @@ export function MonthlyPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-4">
+                  <Button onClick={handleAddExpense}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Expense
+                  </Button>
                   <Select
                     value={categoryFilter}
                     onValueChange={setCategoryFilter}
@@ -862,7 +941,7 @@ export function MonthlyPage() {
         </div>
       </div>
 
-      {/* Edit Expense Dialog */}
+      {/* Add/Edit Expense Dialog */}
       <Dialog
         open={showExpenseDialog}
         onOpenChange={(open) => {
@@ -871,19 +950,22 @@ export function MonthlyPage() {
         }}
       >
         <DialogContent className="max-w-md">
-          {editingExpense && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSaveExpense();
-              }}
-            >
-              <DialogHeader>
-                <DialogTitle>Edit Expense</DialogTitle>
-                <DialogDescription>
-                  Update expense details and settlement amounts
-                </DialogDescription>
-              </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveExpense();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {editingExpense ? "Edit Expense" : "Add Expense"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingExpense
+                  ? "Update expense details and settlement amounts"
+                  : "Add a new expense manually"}
+              </DialogDescription>
+            </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-title">Title</Label>
@@ -1093,15 +1175,18 @@ export function MonthlyPage() {
                 <Button
                   type="submit"
                   disabled={updateExpenseMutation.isPending ||
+                    createExpenseMutation.isPending ||
                     settlementExceeds}
                 >
-                  {updateExpenseMutation.isPending
+                  {(updateExpenseMutation.isPending ||
+                    createExpenseMutation.isPending)
                     ? "Saving..."
-                    : "Save Changes"}
+                    : editingExpense
+                    ? "Save Changes"
+                    : "Add Expense"}
                 </Button>
               </DialogFooter>
             </form>
-          )}
         </DialogContent>
       </Dialog>
     </div>

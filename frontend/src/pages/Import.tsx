@@ -124,16 +124,21 @@ export function ImportPage() {
     ) => importApi.updateStaged(id, update),
     onMutate: async ({ id, update }) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["staged-expenses", targetYearMonth] });
+      await queryClient.cancelQueries({
+        queryKey: ["staged-expenses", targetYearMonth],
+      });
 
       // Snapshot the previous value
-      const previousStaged = queryClient.getQueryData(["staged-expenses", targetYearMonth]);
+      const previousStaged = queryClient.getQueryData([
+        "staged-expenses",
+        targetYearMonth,
+      ]);
 
       // Optimistically update the cache (preserves array order)
       queryClient.setQueryData(
         ["staged-expenses", targetYearMonth],
         (old: typeof stagedExpenses) =>
-          old?.map((s) => s.id === id ? { ...s, ...update } : s)
+          old?.map((s) => s.id === id ? { ...s, ...update } : s),
       );
 
       return { previousStaged };
@@ -141,7 +146,10 @@ export function ImportPage() {
     onError: (_err, _variables, context) => {
       // Rollback on error
       if (context?.previousStaged) {
-        queryClient.setQueryData(["staged-expenses", targetYearMonth], context.previousStaged);
+        queryClient.setQueryData(
+          ["staged-expenses", targetYearMonth],
+          context.previousStaged,
+        );
       }
     },
     // Don't refetch on success - optimistic update is sufficient
@@ -186,6 +194,7 @@ export function ImportPage() {
     onDrop,
     accept: {
       "text/csv": [".csv"],
+      "text/txt": [".txt"],
       "application/vnd.ms-excel": [".xls"],
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
         ".xlsx",
@@ -235,7 +244,9 @@ export function ImportPage() {
 
   const handleBulkDelete = () => {
     const ids = Array.from(selectedStaged);
-    ids.forEach((id) => { deleteStagedMutation.mutate(id); });
+    ids.forEach((id) => {
+      deleteStagedMutation.mutate(id);
+    });
     setSelectedStaged(new Set());
   };
 
@@ -379,25 +390,34 @@ export function ImportPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">
-                      You have {existingStaged.count} staged transaction{existingStaged.count !== 1 ? "s" : ""}
+                      You have {existingStaged.count}{" "}
+                      staged transaction{existingStaged.count !== 1 ? "s" : ""}
                     </h3>
                     <p className="text-muted-foreground mt-1">
-                      There are staged transactions for {getMonthName(existingStaged.yearMonth % 100)} {Math.floor(existingStaged.yearMonth / 100)}.
-                      Would you like to continue reviewing them or start fresh?
+                      There are staged transactions for{" "}
+                      {getMonthName(existingStaged.yearMonth % 100)}{" "}
+                      {Math.floor(existingStaged.yearMonth / 100)}. Would you
+                      like to continue reviewing them or start fresh?
                     </p>
                     <div className="flex gap-3 mt-4">
-                      <Button onClick={() => { 
-                        setTargetYearMonth(existingStaged.yearMonth);
-                        setStep("review"); 
-                      }}>
+                      <Button
+                        onClick={() => {
+                          setTargetYearMonth(existingStaged.yearMonth);
+                          setStep("review");
+                        }}
+                      >
                         Continue reviewing
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => { clearStagedMutation.mutate(existingStaged.yearMonth); }}
+                        onClick={() => {
+                          clearStagedMutation.mutate(existingStaged.yearMonth);
+                        }}
                         disabled={clearStagedMutation.isPending}
                       >
-                        {clearStagedMutation.isPending ? "Clearing..." : "Start fresh"}
+                        {clearStagedMutation.isPending
+                          ? "Clearing..."
+                          : "Start fresh"}
                       </Button>
                     </div>
                   </div>
@@ -446,7 +466,9 @@ export function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Extraction Script</label>
+                  <label className="text-sm font-medium">
+                    Extraction Script
+                  </label>
                   <Select
                     value={selectedExtractor}
                     onValueChange={setSelectedExtractor}
@@ -476,14 +498,19 @@ export function ImportPage() {
                   </label>
                   <Select
                     value={targetYearMonth.toString()}
-                    onValueChange={(v) => { setTargetYearMonth(parseInt(v)); }}
+                    onValueChange={(v) => {
+                      setTargetYearMonth(parseInt(v));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {monthOptions.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value.toString()}>
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value.toString()}
+                        >
                           {opt.label}
                         </SelectItem>
                       ))}
@@ -523,7 +550,9 @@ export function ImportPage() {
                           ? "border-primary bg-primary/5"
                           : "hover:bg-muted/50",
                       )}
-                      onClick={() => { setSelectedExtractor(ext.name); }}
+                      onClick={() => {
+                        setSelectedExtractor(ext.name);
+                      }}
                     >
                       <div className="font-medium">{ext.name}</div>
                       <div className="text-sm text-muted-foreground">
@@ -622,7 +651,9 @@ export function ImportPage() {
                     </>
                   )}
                   <Button
-                    onClick={() => { commitMutation.mutate(); }}
+                    onClick={() => {
+                      commitMutation.mutate();
+                    }}
                     disabled={commitMutation.isPending ||
                       nonDuplicateStaged.length === 0}
                   >
@@ -720,7 +751,9 @@ export function ImportPage() {
                             <td className="p-3">
                               <Checkbox
                                 checked={selectedStaged.has(staged.id)}
-                                onCheckedChange={() => { toggleStaged(staged.id); }}
+                                onCheckedChange={() => {
+                                  toggleStaged(staged.id);
+                                }}
                               />
                             </td>
                             <td className="p-3 text-sm tabular-nums">
@@ -744,7 +777,9 @@ export function ImportPage() {
                             <td className="p-3">
                               <Select
                                 value={staged.categoryId || "uncategorized"}
-                                onValueChange={(value) => { handleCategoryChange(staged.id, value); }}
+                                onValueChange={(value) => {
+                                  handleCategoryChange(staged.id, value);
+                                }}
                               >
                                 <SelectTrigger className="w-[130px]">
                                   <SelectValue />
@@ -772,13 +807,17 @@ export function ImportPage() {
                                 className="w-[100px] h-8 text-xs"
                                 placeholder="Notes..."
                                 defaultValue={staged.notes || ""}
-                                onBlur={(e) => { handleNotesChange(staged.id, e.target.value); }}
+                                onBlur={(e) => {
+                                  handleNotesChange(staged.id, e.target.value);
+                                }}
                               />
                             </td>
                             <td className="p-3 text-center">
                               <Checkbox
                                 checked={staged.isShared}
-                                onCheckedChange={(checked) => { handleIsSharedChange(staged.id, !!checked); }}
+                                onCheckedChange={(checked) => {
+                                  handleIsSharedChange(staged.id, !!checked);
+                                }}
                               />
                             </td>
                             <td className="p-3">
@@ -829,7 +868,9 @@ export function ImportPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => { deleteStagedMutation.mutate(staged.id); }}
+                                onClick={() => {
+                                  deleteStagedMutation.mutate(staged.id);
+                                }}
                               >
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
                               </Button>
@@ -886,7 +927,9 @@ export function ImportPage() {
                             {formatDate(staged.date)}
                           </td>
                           <td className="p-3">
-                            <div className="font-medium min-w-[200px]">{staged.title}</div>
+                            <div className="font-medium min-w-[200px]">
+                              {staged.title}
+                            </div>
                           </td>
                           <td className="p-3">
                             {staged.source && (
@@ -902,7 +945,9 @@ export function ImportPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => { deleteStagedMutation.mutate(staged.id); }}
+                              onClick={() => {
+                                deleteStagedMutation.mutate(staged.id);
+                              }}
                             >
                               <X className="h-4 w-4 text-muted-foreground" />
                             </Button>
@@ -917,7 +962,12 @@ export function ImportPage() {
           )}
 
           <div className="flex justify-between">
-            <Button variant="outline" onClick={() => { setStep("upload"); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStep("upload");
+              }}
+            >
               Back to Upload
             </Button>
           </div>

@@ -297,3 +297,59 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
         ))
 
     return transactions
+
+@register_extractor(
+    name="DNB Common Account",
+    description="DNB Common Account Export (CSV)",
+    formats=["csv"]
+)
+def extract_dnb_common_account(file_content: bytes, filename: str) -> List[ExtractedTransaction]:
+    """
+    Extract transactions from DNB Common Account export.
+    CSV with semicolon separator and dot decimal
+    Columns: Dato, Forklaring, Ut fra konto, Inn på konto
+    Only processes outgoing transactions (Ut fra konto)
+    Date format: DD.MM.YYYY    
+    """
+    # Try different encodings
+    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+        try:
+            df = pd.read_csv(
+                io.BytesIO(file_content),
+                sep=';',
+                decimal='.',
+                encoding=encoding
+            )
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise ValueError("Could not decode file with any supported encoding")
+
+    #Select required columns
+    required_cols = ['Dato', 'Forklaring', 'Ut fra konto']
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
+    df = df[required_cols]
+
+    df = df[df['Ut fra konto'] > 0]
+    transactions = []
+    for _, row in df.iterrows():
+        date_val = row["Dato"]
+        if isinstance(date_val, str):
+            try:
+                date_val = pd.to_datetime(date_val, dayfirst=True).strftime("%Y-%m-%d")
+            except:
+                date_val = parse_date(date_val)
+        else:
+            date_val = parse_date(date_val)
+        transactions.append(ExtractedTransaction(
+            date=date_val,
+            title=str(row["Forklaring"]).strip(),
+            amount=to_minor_units(float(row["Ut fra konto"])),
+            source="DNB Common",
+            raw_data=row.to_json()
+        ))
+    return transactions
+
