@@ -137,6 +137,7 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
             title=str(row["Beskrivelse"]).strip(),
             amount=parse_norwegian_amount(row["Beløp"]),
             source="Amex",
+            isShared=True,
             raw_data=row.to_json()
         ))
 
@@ -367,6 +368,7 @@ def extract_dnb_common_account(file_content: bytes, filename: str) -> List[Extra
             title=str(row["Forklaring"]).strip(),
             amount=to_minor_units(float(row["Ut fra konto"])),
             source="DNB Common",
+            isShared=True,
             raw_data=row.to_json()
         ))
     return transactions
