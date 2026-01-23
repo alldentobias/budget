@@ -57,6 +57,15 @@ export function SettingsPage() {
     },
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { color: string } }) =>
+      categoriesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category color updated" });
+    },
+  });
+
   const handleDeleteCategory = () => {
     if (categoryToDelete) {
       deleteCategoryMutation.mutate(categoryToDelete.id);
@@ -155,9 +164,16 @@ export function SettingsPage() {
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: cat.color }}
+                  <Input
+                    type="color"
+                    value={cat.color}
+                    onChange={(e) =>
+                      updateCategoryMutation.mutate({
+                        id: cat.id,
+                        data: { color: e.target.value },
+                      })}
+                    className="w-8 h-8 p-0.5 rounded-full cursor-pointer border-2 border-transparent hover:border-primary/50 transition-colors"
+                    title="Change color"
                   />
                   <span className="font-medium">{cat.name}</span>
                 </div>
