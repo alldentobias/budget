@@ -158,6 +158,13 @@ export function DashboardPage() {
     color: cat.color,
   })) || [];
 
+  // Prepare pie chart data for shared expenses by category
+  const sharedPieData = summary?.sharedCategories?.map((cat) => ({
+    name: cat.name,
+    value: cat.amount,
+    color: cat.color,
+  })) || [];
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header with Month Navigation */}
@@ -384,6 +391,104 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Shared Expenses Section */}
+      {(summary?.sharedExpenses ?? 0) > 0 && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Shared Expenses Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Shared Expenses</CardTitle>
+              <CardDescription>Joint account spending this month</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Total Shared</span>
+                <span className="text-2xl font-bold text-purple-500">
+                  {formatCurrency(summary?.sharedExpenses || 0)}
+                </span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Your Share (50%)</span>
+                <span className="text-lg font-semibold text-purple-400">
+                  {formatCurrency(Math.floor((summary?.sharedExpenses || 0) / 2))}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shared Expenses by Category */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Shared by Category</CardTitle>
+              <CardDescription>Joint account breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {sharedPieData.length > 0
+                ? (
+                  <div className="space-y-4">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={sharedPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          innerRadius={50}
+                        >
+                          {sharedPieData.map((entry, index) => (
+                            <Cell key={`shared-cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => formatCurrency(value)}
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            color: "hsl(var(--foreground))",
+                          }}
+                          labelStyle={{
+                            color: "hsl(var(--foreground))",
+                          }}
+                          itemStyle={{
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Legend */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {sharedPieData.map((cat) => (
+                        <div
+                          key={cat.name}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: cat.color }}
+                          />
+                          <span className="truncate">{cat.name}</span>
+                          <span className="ml-auto tabular-nums text-muted-foreground">
+                            {formatCurrency(cat.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+                : (
+                  <div className="flex items-center justify-center h-[200px] text-muted-foreground">
+                    No shared expenses this month
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Net Worth History */}
       <Card>

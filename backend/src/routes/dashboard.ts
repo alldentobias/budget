@@ -122,6 +122,14 @@ dashboardRoutes.get("/summary", async (c) => {
     { name: string; color: string; amount: number }
   >();
 
+  // Shared expenses category breakdown (full amounts for shared account view)
+  const sharedCategorySpending = new Map<
+    string,
+    { name: string; color: string; amount: number }
+  >();
+
+  let sharedExpensesTotal = 0;
+
   for (const expense of monthlyExpenses) {
     if (expense.amount <= 0) continue; // Skip non-expenses
 
@@ -135,9 +143,22 @@ dashboardRoutes.get("/summary", async (c) => {
       { name: catName, color: catColor, amount: 0 };
     existing.amount += effectiveAmount;
     categorySpending.set(catId, existing);
+
+    // Track shared expenses separately (full amount)
+    if (expense.isShared) {
+      sharedExpensesTotal += amount;
+      const existingShared = sharedCategorySpending.get(catId) ||
+        { name: catName, color: catColor, amount: 0 };
+      existingShared.amount += amount;
+      sharedCategorySpending.set(catId, existingShared);
+    }
   }
 
   const topCategories = Array.from(categorySpending.values())
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  const sharedCategories = Array.from(sharedCategorySpending.values())
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
@@ -151,6 +172,8 @@ dashboardRoutes.get("/summary", async (c) => {
     monthlySavings: savingsTotal,
     stockPortfolioValue,
     topCategories,
+    sharedExpenses: sharedExpensesTotal,
+    sharedCategories,
   });
 });
 
