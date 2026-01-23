@@ -13,7 +13,7 @@ from app.schemas import ExtractedTransaction, ExtractionResponse
 app = FastAPI(
     title="Budget Extractor Service",
     description="Service for extracting transaction data from bank CSV/Excel files",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -37,13 +37,10 @@ async def list_extractors():
 
 
 @app.post("/extract", response_model=ExtractionResponse)
-async def extract_transactions(
-    file: UploadFile = File(...),
-    extractor: str = Form(...)
-):
+async def extract_transactions(file: UploadFile = File(...), extractor: str = Form(...)):
     """
     Extract transactions from an uploaded file using the specified extractor.
-    
+
     - **file**: CSV or Excel file from bank/credit card provider
     - **extractor**: Name of the extraction script to use
     """
@@ -61,7 +58,7 @@ async def extract_transactions(
             success=True,
             message=f"Successfully extracted {len(transactions)} transactions",
             transactions=transactions,
-            extractor_used=extractor
+            extractor_used=extractor,
         )
 
     except ValueError as e:
@@ -81,24 +78,19 @@ async def preview_file(file: UploadFile = File(...)):
 
         # Try to read as CSV first, then Excel
         try:
-            if filename.endswith(('.xlsx', '.xls')):
+            if filename.endswith((".xlsx", ".xls")):
                 df = pd.read_excel(io.BytesIO(content), nrows=10)
             else:
                 df = pd.read_csv(io.BytesIO(content), nrows=10)
         except Exception:
             # Try with different encodings
-            df = pd.read_csv(io.BytesIO(content), nrows=10, encoding='latin-1')
+            df = pd.read_csv(io.BytesIO(content), nrows=10, encoding="latin-1")
 
         return {
             "columns": list(df.columns),
             "rows": df.head(5).to_dict(orient="records"),
-            "total_preview_rows": len(df)
+            "total_preview_rows": len(df),
         }
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not preview file: {e!s}")
-
-
-
-
-

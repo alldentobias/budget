@@ -124,15 +124,9 @@ assetsRoutes.put("/:id", async (c) => {
       .set({
         type: data.type,
         name: data.name,
-        ticker: data.ticker !== undefined
-          ? (data.ticker || null)
-          : existing.ticker,
-        quantity: data.quantity !== undefined
-          ? data.quantity.toString()
-          : existing.quantity,
-        manualValue: data.manualValue !== undefined
-          ? data.manualValue
-          : existing.manualValue,
+        ticker: data.ticker !== undefined ? (data.ticker || null) : existing.ticker,
+        quantity: data.quantity !== undefined ? data.quantity.toString() : existing.quantity,
+        manualValue: data.manualValue !== undefined ? data.manualValue : existing.manualValue,
         currentPrice,
         ownershipPct: data.ownershipPct !== undefined
           ? data.ownershipPct.toString()

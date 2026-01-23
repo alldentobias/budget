@@ -211,6 +211,27 @@ export const incomesApi = {
     fetchApi<void>(`/incomes/${id}`, { method: "DELETE" }),
 };
 
+// Savings
+export const savingsApi = {
+  getByMonth: (yearMonth: number) =>
+    fetchApi<Saving[]>("/savings", { params: { yearMonth } }),
+
+  create: (saving: CreateSavingInput) =>
+    fetchApi<Saving>("/savings", {
+      method: "POST",
+      body: JSON.stringify(saving),
+    }),
+
+  update: (id: string, saving: Partial<CreateSavingInput>) =>
+    fetchApi<Saving>(`/savings/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(saving),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/savings/${id}`, { method: "DELETE" }),
+};
+
 // Import
 export const importApi = {
   getExtractors: () =>
@@ -307,6 +328,7 @@ export interface DashboardSummary {
   debtToAssetRatio: number;
   monthlyExpenses: number;
   monthlyIncome: number;
+  monthlySavings: number;
   stockPortfolioValue: number;
   topCategories: Array<{ name: string; amount: number; color: string }>;
 }
@@ -435,6 +457,22 @@ export interface Income {
 }
 
 export interface CreateIncomeInput {
+  yearMonth: number;
+  amount: number;
+  source: string;
+  notes?: string;
+}
+
+export interface Saving {
+  id: string;
+  userId: string;
+  yearMonth: number;
+  amount: number;
+  source: string;
+  notes?: string;
+}
+
+export interface CreateSavingInput {
   yearMonth: number;
   amount: number;
   source: string;

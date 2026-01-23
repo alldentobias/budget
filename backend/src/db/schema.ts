@@ -129,6 +129,18 @@ export const incomes = pgTable("incomes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const savings = pgTable("savings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, {
+    onDelete: "cascade",
+  }),
+  yearMonth: integer("year_month").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  source: varchar("source", { length: 255 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const netWorthSnapshots = pgTable("net_worth_snapshots", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, {
@@ -149,6 +161,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   assets: many(assets),
   loans: many(loans),
   incomes: many(incomes),
+  savings: many(savings),
   netWorthSnapshots: many(netWorthSnapshots),
 }));
 
@@ -204,6 +217,13 @@ export const loansRelations = relations(loans, ({ one }) => ({
 export const incomesRelations = relations(incomes, ({ one }) => ({
   user: one(users, {
     fields: [incomes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const savingsRelations = relations(savings, ({ one }) => ({
+  user: one(users, {
+    fields: [savings.userId],
     references: [users.id],
   }),
 }));

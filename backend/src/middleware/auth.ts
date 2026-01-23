@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 const JWT_SECRET = Deno.env.get("JWT_SECRET") || "your-super-secret-jwt-key";
 
 // Create a crypto key from the secret
-async function getKey() {
+async function getKey(): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(JWT_SECRET);
   return await crypto.subtle.importKey(

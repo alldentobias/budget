@@ -283,20 +283,31 @@ export function DashboardPage() {
                 {formatCurrency(summary?.monthlyExpenses || 0)}
               </span>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <PiggyBank className="h-3 w-3 text-blue-500" />
+                Savings
+              </span>
+              <span className="text-lg font-semibold text-blue-500">
+                {formatCurrency(summary?.monthlySavings || 0)}
+              </span>
+            </div>
             <Separator />
             <div className="flex items-center justify-between">
               <span className="font-medium">Balance</span>
               <span
                 className={`text-lg font-bold ${
                   (summary?.monthlyIncome || 0) -
-                        (summary?.monthlyExpenses || 0) >= 0
+                        (summary?.monthlyExpenses || 0) -
+                        (summary?.monthlySavings || 0) >= 0
                     ? "text-emerald-500"
                     : "text-rose-500"
                 }`}
               >
                 {formatCurrency(
                   (summary?.monthlyIncome || 0) -
-                    (summary?.monthlyExpenses || 0),
+                    (summary?.monthlyExpenses || 0) -
+                    (summary?.monthlySavings || 0),
                 )}
               </span>
             </div>

@@ -1,19 +1,12 @@
 import { Hono } from "hono";
-import {
-  assets,
-  db,
-  expenses,
-  incomes,
-  loans,
-  netWorthSnapshots,
-} from "../db/index.ts";
+import { assets, db, expenses, incomes, loans, netWorthSnapshots, savings } from "../db/index.ts";
 import { and, desc, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
 const dashboardRoutes = new Hono();
 dashboardRoutes.use("*", authMiddleware);
 
-function getCurrentYearMonth() {
+function getCurrentYearMonth(): number {
   const now = new Date();
   return now.getFullYear() * 100 + (now.getMonth() + 1);
 }
@@ -21,9 +14,7 @@ function getCurrentYearMonth() {
 dashboardRoutes.get("/summary", async (c) => {
   const user = c.get("user");
   const yearMonthParam = c.req.query("yearMonth");
-  const currentYearMonth = yearMonthParam
-    ? parseInt(yearMonthParam)
-    : getCurrentYearMonth();
+  const currentYearMonth = yearMonthParam ? parseInt(yearMonthParam) : getCurrentYearMonth();
 
   // Fetch all data in parallel
   const [
@@ -31,6 +22,7 @@ dashboardRoutes.get("/summary", async (c) => {
     userLoans,
     monthlyExpenses,
     monthlyIncomes,
+    monthlySavings,
   ] = await Promise.all([
     db.query.assets.findMany({
       where: eq(assets.userId, user.id),
@@ -49,6 +41,12 @@ dashboardRoutes.get("/summary", async (c) => {
       where: and(
         eq(incomes.userId, user.id),
         eq(incomes.yearMonth, currentYearMonth),
+      ),
+    }),
+    db.query.savings.findMany({
+      where: and(
+        eq(savings.userId, user.id),
+        eq(savings.yearMonth, currentYearMonth),
       ),
     }),
   ]);
@@ -82,9 +80,7 @@ dashboardRoutes.get("/summary", async (c) => {
   const netWorth = totalAssets - totalLiabilities;
 
   // Debt to asset ratio (percentage)
-  const debtToAssetRatio = totalAssets > 0
-    ? (totalLiabilities / totalAssets) * 100
-    : 0;
+  const debtToAssetRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
 
   // Monthly expenses (positive amounts are expenses, shared expenses count as half)
   // amounts are in minor units
@@ -98,6 +94,12 @@ dashboardRoutes.get("/summary", async (c) => {
   // Monthly income (in minor units)
   const incomeTotal = monthlyIncomes.reduce(
     (sum, i) => sum + i.amount,
+    0,
+  );
+
+  // Monthly savings (in minor units)
+  const savingsTotal = monthlySavings.reduce(
+    (sum, s) => sum + s.amount,
     0,
   );
 
@@ -133,6 +135,7 @@ dashboardRoutes.get("/summary", async (c) => {
     debtToAssetRatio,
     monthlyExpenses: expensesTotal,
     monthlyIncome: incomeTotal,
+    monthlySavings: savingsTotal,
     stockPortfolioValue,
     topCategories,
   });

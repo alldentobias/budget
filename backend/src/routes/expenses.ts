@@ -183,9 +183,7 @@ expensesRoutes.put("/bulk", async (c) => {
       const [updated] = await db
         .update(expenses)
         .set({
-          categoryId: update.categoryId !== undefined
-            ? (update.categoryId || null)
-            : undefined,
+          categoryId: update.categoryId !== undefined ? (update.categoryId || null) : undefined,
           notes: update.notes,
           isShared: update.isShared,
           collectToMe: update.collectToMe,
@@ -225,9 +223,7 @@ expensesRoutes.put("/:id", async (c) => {
     const [updated] = await db
       .update(expenses)
       .set({
-        categoryId: data.categoryId !== undefined
-          ? (data.categoryId || null)
-          : undefined,
+        categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
         date: data.date,
         amount: data.amount,
         title: data.title,

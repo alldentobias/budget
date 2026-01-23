@@ -94,7 +94,7 @@ importRoutes.post("/upload", async (c) => {
     });
 
     let duplicateCount = 0;
-    let filteredCount = result.transactions.length - transactions.length;
+    const filteredCount = result.transactions.length - transactions.length;
     const staged = [];
 
     for (let i = 0; i < transactions.length; i++) {

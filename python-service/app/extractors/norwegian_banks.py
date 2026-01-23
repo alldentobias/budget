@@ -6,6 +6,7 @@ All amounts are returned in minor units (øre/cents):
   - 12.50 kr -> 1250
   - 100.00 kr -> 10000
 """
+
 import io
 from datetime import datetime
 from typing import List
@@ -47,15 +48,13 @@ def parse_date(date_val) -> str:
             except ValueError:
                 continue
         return date_val
-    if hasattr(date_val, 'strftime'):
+    if hasattr(date_val, "strftime"):
         return date_val.strftime("%Y-%m-%d")
     return str(date_val)
 
 
 @register_extractor(
-    name="dnb_mastercard",
-    description="DNB MasterCard Extraction",
-    formats=["xlsx", "xls"]
+    name="dnb_mastercard", description="DNB MasterCard Extraction", formats=["xlsx", "xls"]
 )
 def extract_dnb_mastercard(file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """
@@ -79,13 +78,15 @@ def extract_dnb_mastercard(file_content: bytes, filename: str) -> list[Extracted
 
     transactions = []
     for _, row in df.iterrows():
-        transactions.append(ExtractedTransaction(
-            date=parse_date(row["Dato"]),
-            title=str(row["Beløpet gjelder"]).strip(),
-            amount=parse_norwegian_amount(row["Ut"]),
-            source="DNB Credit",
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=parse_date(row["Dato"]),
+                title=str(row["Beløpet gjelder"]).strip(),
+                amount=parse_norwegian_amount(row["Ut"]),
+                source="DNB Credit",
+                raw_data=row.to_json(),
+            )
+        )
 
     return transactions
 
@@ -102,7 +103,7 @@ def parse_amex_date(date_val) -> str:
             pass
         # Fallback to generic parsing
         return parse_date(date_val)
-    if hasattr(date_val, 'strftime'):
+    if hasattr(date_val, "strftime"):
         return date_val.strftime("%Y-%m-%d")
     return str(date_val)
 
@@ -110,7 +111,7 @@ def parse_amex_date(date_val) -> str:
 @register_extractor(
     name="amex_norway",
     description="American Express Norway (aktivitet.xlsx)",
-    formats=["xlsx", "xls"]
+    formats=["xlsx", "xls"],
 )
 def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """
@@ -132,14 +133,16 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
 
     transactions = []
     for _, row in df.iterrows():
-        transactions.append(ExtractedTransaction(
-            date=parse_amex_date(row["Dato"]),
-            title=str(row["Beskrivelse"]).strip(),
-            amount=parse_norwegian_amount(row["Beløp"]),
-            source="Amex",
-            isShared=True,
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=parse_amex_date(row["Dato"]),
+                title=str(row["Beskrivelse"]).strip(),
+                amount=parse_norwegian_amount(row["Beløp"]),
+                source="Amex",
+                isShared=True,
+                raw_data=row.to_json(),
+            )
+        )
 
     return transactions
 
@@ -147,7 +150,7 @@ def extract_amex_norway(file_content: bytes, filename: str) -> list[ExtractedTra
 @register_extractor(
     name="sb1_credit",
     description="Sparebank1 MasterCard Credit (transactions.csv)",
-    formats=["csv"]
+    formats=["csv"],
 )
 def extract_sb1_credit(file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """
@@ -157,14 +160,9 @@ def extract_sb1_credit(file_content: bytes, filename: str) -> list[ExtractedTran
     Only processes negative amounts (expenses)
     """
     # Try different encodings
-    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+    for encoding in ["utf-8", "latin-1", "iso-8859-1"]:
         try:
-            df = pd.read_csv(
-                io.BytesIO(file_content),
-                sep=';',
-                decimal=',',
-                encoding=encoding
-            )
+            df = pd.read_csv(io.BytesIO(file_content), sep=";", decimal=",", encoding=encoding)
             break
         except UnicodeDecodeError:
             continue
@@ -172,7 +170,7 @@ def extract_sb1_credit(file_content: bytes, filename: str) -> list[ExtractedTran
         raise ValueError("Could not decode file with any supported encoding")
 
     # Select required columns
-    required_cols = ['Kjøpsdato', 'Beskrivelse', 'Beløp']
+    required_cols = ["Kjøpsdato", "Beskrivelse", "Beløp"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
@@ -180,25 +178,25 @@ def extract_sb1_credit(file_content: bytes, filename: str) -> list[ExtractedTran
     df = df[required_cols]
 
     # Filter only negative amounts (expenses)
-    df = df[df['Beløp'] < 0]
+    df = df[df["Beløp"] < 0]
 
     transactions = []
     for _, row in df.iterrows():
-        transactions.append(ExtractedTransaction(
-            date=parse_date(row["Kjøpsdato"]),
-            title=str(row["Beskrivelse"]).strip(),
-            amount=to_minor_units(abs(float(row["Beløp"]))),
-            source="SB1 Credit",
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=parse_date(row["Kjøpsdato"]),
+                title=str(row["Beskrivelse"]).strip(),
+                amount=to_minor_units(abs(float(row["Beløp"]))),
+                source="SB1 Credit",
+                raw_data=row.to_json(),
+            )
+        )
 
     return transactions
 
 
 @register_extractor(
-    name="sb1_common",
-    description="Sparebank1 Common Account (common.csv)",
-    formats=["csv"]
+    name="sb1_common", description="Sparebank1 Common Account (common.csv)", formats=["csv"]
 )
 def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """
@@ -208,14 +206,9 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
     Only processes outgoing (Ut < 0)
     """
     # Try different encodings
-    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+    for encoding in ["utf-8", "latin-1", "iso-8859-1"]:
         try:
-            df = pd.read_csv(
-                io.BytesIO(file_content),
-                sep=';',
-                decimal=',',
-                encoding=encoding
-            )
+            df = pd.read_csv(io.BytesIO(file_content), sep=";", decimal=",", encoding=encoding)
             break
         except UnicodeDecodeError:
             continue
@@ -223,7 +216,7 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
         raise ValueError("Could not decode file with any supported encoding")
 
     # Select required columns
-    required_cols = ['Dato', 'Beskrivelse', 'Ut']
+    required_cols = ["Dato", "Beskrivelse", "Ut"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
@@ -231,7 +224,7 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
     df = df[required_cols]
 
     # Filter only outgoing transactions
-    df = df[df['Ut'] < 0]
+    df = df[df["Ut"] < 0]
 
     transactions = []
     for _, row in df.iterrows():
@@ -245,22 +238,22 @@ def extract_sb1_common(file_content: bytes, filename: str) -> list[ExtractedTran
         else:
             date_val = parse_date(date_val)
 
-        transactions.append(ExtractedTransaction(
-            date=date_val,
-            title=str(row["Beskrivelse"]).strip(),
-            amount=to_minor_units(abs(float(row["Ut"]))),
-            source="SB1 Common",
-            isShared=True,
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=date_val,
+                title=str(row["Beskrivelse"]).strip(),
+                amount=to_minor_units(abs(float(row["Ut"]))),
+                source="SB1 Common",
+                isShared=True,
+                raw_data=row.to_json(),
+            )
+        )
 
     return transactions
 
 
 @register_extractor(
-    name="sb1_debit",
-    description="Sparebank1 Debit Account (debit.csv)",
-    formats=["csv"]
+    name="sb1_debit", description="Sparebank1 Debit Account (debit.csv)", formats=["csv"]
 )
 def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTransaction]:
     """
@@ -270,14 +263,9 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
     Only processes outgoing (Ut < 0)
     """
     # Try different encodings
-    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+    for encoding in ["utf-8", "latin-1", "iso-8859-1"]:
         try:
-            df = pd.read_csv(
-                io.BytesIO(file_content),
-                sep=';',
-                decimal=',',
-                encoding=encoding
-            )
+            df = pd.read_csv(io.BytesIO(file_content), sep=";", decimal=",", encoding=encoding)
             break
         except UnicodeDecodeError:
             continue
@@ -285,7 +273,7 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
         raise ValueError("Could not decode file with any supported encoding")
 
     # Select required columns
-    required_cols = ['Dato', 'Beskrivelse', 'Ut']
+    required_cols = ["Dato", "Beskrivelse", "Ut"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
@@ -293,7 +281,7 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
     df = df[required_cols]
 
     # Filter only outgoing transactions
-    df = df[df['Ut'] < 0]
+    df = df[df["Ut"] < 0]
 
     transactions = []
     for _, row in df.iterrows():
@@ -307,20 +295,21 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
         else:
             date_val = parse_date(date_val)
 
-        transactions.append(ExtractedTransaction(
-            date=date_val,
-            title=str(row["Beskrivelse"]).strip(),
-            amount=to_minor_units(abs(float(row["Ut"]))),
-            source="SB1 Debit",
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=date_val,
+                title=str(row["Beskrivelse"]).strip(),
+                amount=to_minor_units(abs(float(row["Ut"]))),
+                source="SB1 Debit",
+                raw_data=row.to_json(),
+            )
+        )
 
     return transactions
 
+
 @register_extractor(
-    name="DNB Common Account",
-    description="DNB Common Account Export (CSV)",
-    formats=["csv"]
+    name="DNB Common Account", description="DNB Common Account Export (CSV)", formats=["csv"]
 )
 def extract_dnb_common_account(file_content: bytes, filename: str) -> List[ExtractedTransaction]:
     """
@@ -328,31 +317,26 @@ def extract_dnb_common_account(file_content: bytes, filename: str) -> List[Extra
     CSV with semicolon separator and dot decimal
     Columns: Dato, Forklaring, Ut fra konto, Inn på konto
     Only processes outgoing transactions (Ut fra konto)
-    Date format: DD.MM.YYYY    
+    Date format: DD.MM.YYYY
     """
     # Try different encodings
-    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+    for encoding in ["utf-8", "latin-1", "iso-8859-1"]:
         try:
-            df = pd.read_csv(
-                io.BytesIO(file_content),
-                sep=';',
-                decimal='.',
-                encoding=encoding
-            )
+            df = pd.read_csv(io.BytesIO(file_content), sep=";", decimal=".", encoding=encoding)
             break
         except UnicodeDecodeError:
             continue
     else:
         raise ValueError("Could not decode file with any supported encoding")
 
-    #Select required columns
-    required_cols = ['Dato', 'Forklaring', 'Ut fra konto']
+    # Select required columns
+    required_cols = ["Dato", "Forklaring", "Ut fra konto"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
     df = df[required_cols]
 
-    df = df[df['Ut fra konto'] > 0]
+    df = df[df["Ut fra konto"] > 0]
     transactions = []
     for _, row in df.iterrows():
         date_val = row["Dato"]
@@ -363,13 +347,14 @@ def extract_dnb_common_account(file_content: bytes, filename: str) -> List[Extra
                 date_val = parse_date(date_val)
         else:
             date_val = parse_date(date_val)
-        transactions.append(ExtractedTransaction(
-            date=date_val,
-            title=str(row["Forklaring"]).strip(),
-            amount=to_minor_units(float(row["Ut fra konto"])),
-            source="DNB Common",
-            isShared=True,
-            raw_data=row.to_json()
-        ))
+        transactions.append(
+            ExtractedTransaction(
+                date=date_val,
+                title=str(row["Forklaring"]).strip(),
+                amount=to_minor_units(float(row["Ut fra konto"])),
+                source="DNB Common",
+                isShared=True,
+                raw_data=row.to_json(),
+            )
+        )
     return transactions
-

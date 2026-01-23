@@ -11,14 +11,16 @@ EXTRACTORS: dict[str, dict[str, Any]] = {}
 
 def register_extractor(name: str, description: str, formats: list[str]):
     """Decorator to register an extractor function"""
+
     def decorator(func):
         EXTRACTORS[name] = {
             "name": name,
             "description": description,
             "formats": formats,
-            "function": func
+            "function": func,
         }
         return func
+
     return decorator
 
 
@@ -28,7 +30,7 @@ def get_available_extractors() -> list[dict[str, str]]:
         {
             "name": info["name"],
             "description": info["description"],
-            "supported_formats": info["formats"]
+            "supported_formats": info["formats"],
         }
         for info in EXTRACTORS.values()
     ]
@@ -40,10 +42,10 @@ def run_extractor(name: str, file_content: bytes, filename: str) -> list[Extract
         raise ValueError(f"Unknown extractor: {name}. Available: {list(EXTRACTORS.keys())}")
 
     transactions = EXTRACTORS[name]["function"](file_content, filename)
-    
+
     # Sort by date and assign sortIndex
     sorted_transactions = sorted(transactions, key=lambda t: t.date)
-    
+
     return [
         ExtractedTransaction(
             date=t.date,
@@ -62,4 +64,3 @@ def run_extractor(name: str, file_content: bytes, filename: str) -> list[Extract
 # Import all extractor modules to register them
 from app.extractors.generic_csv import *
 from app.extractors.norwegian_banks import *
-

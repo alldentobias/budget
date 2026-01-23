@@ -6,48 +6,140 @@ This is a personal budgeting application with:
 - **Backend**: Deno + Hono + Drizzle ORM + PostgreSQL
 - **Python Service**: FastAPI + pandas for bank data extraction
 
-## Code Style & Best Practices
+## Critical: Database Migrations
+**NEVER edit `scripts/init.sql` directly.** This app is deployed in production.
 
-### TypeScript/React (Frontend)
-- Use functional components with hooks
-- Prefer `const` over `let`, never use `var`
-- Use TypeScript strict mode - no `any` types without justification
-- Use React Query (TanStack Query) for data fetching
-- Colocate component styles using Tailwind classes
-- Use shadcn/ui components - don't reinvent UI primitives
-- Extract reusable logic into custom hooks in `/hooks`
-- Keep components small and focused (< 200 lines ideally)
-- Use absolute imports with `@/` prefix
-- Format: 2-space indentation, no semicolons optional but be consistent
-- All monetary amounts in frontend are in **major units** (kr, not øre)
+All database schema changes MUST be done via migrations:
+- Create new migrations in `scripts/migrations/` with sequential numbering (e.g., `003_add_feature.sql`)
+- Follow the existing migration pattern with header comments:
+  ```sql
+  -- Migration: 003_description
+  -- Description: What this migration does
+  -- Date: YYYY-MM-DD
+  ```
+- Use `CREATE TABLE IF NOT EXISTS` and `IF NOT EXISTS` checks for idempotency
+- Update the Drizzle schema in `backend/src/db/schema.ts` to match
+- Run migrations with `./scripts/run-migrations.sh`
 
-### Deno/TypeScript (Backend)
-- Use Deno's native TypeScript support
-- Prefer Deno standard library over npm packages when available
-- Use `Hono` for routing - keep route files focused
-- Use Zod for request validation
-- Use Drizzle ORM with type-safe queries
-- All monetary amounts stored as **integers in minor units** (øre/cents)
-- Convert to/from minor units at API boundaries
-- Handle errors with proper HTTP status codes
-- Use async/await, avoid callbacks
-- Keep middleware thin and reusable
-- Test with Deno's built-in test runner
+## TypeScript Conventions (Google Style Guide)
 
-### Python (Extraction Service)
-- Use Python 3.11+ features
-- Type hints for all function signatures
-- Use Pydantic for data validation and schemas
-- Use pandas for data manipulation
-- Follow PEP 8 style guide
-- Keep extractors modular - one function per bank format
-- Use pytest for testing
-- Docstrings for public functions
+### Imports
+- Use named imports: `import {Foo} from './foo'`
+- Use namespace imports for large APIs: `import * as tableview from './tableview'`
+- **Never use default exports** - always use named exports
+- Order imports: external packages first, then internal modules
+- Use relative imports (`./foo`) within the same project
+
+### Naming
+- `PascalCase`: classes, interfaces, types, enums, decorators, type parameters
+- `camelCase`: variables, functions, methods, properties, module aliases
+- `CONSTANT_CASE`: global constants, enum values
+- Avoid prefixing interfaces with `I` or types with `T`
+
+### Types
+- Always declare return types for functions and methods
+- Prefer interfaces over type aliases for object shapes
+- Use `unknown` over `any` - narrow types explicitly
+- Use optional (`?`) over `| undefined` when appropriate
+- Avoid type assertions (`as`) when possible; prefer type guards
+
+### Code Style
+- Use `const` by default, `let` when reassignment is needed, never `var`
+- Prefer template literals over string concatenation
+- Use nullish coalescing (`??`) and optional chaining (`?.`)
+- Destructure objects and arrays where it improves readability
+- Prefer `for...of` over indexed `for` loops
+- Use arrow functions for callbacks and inline functions
+
+### Comments & Documentation
+- Use JSDoc for public APIs with `@param` and `@returns`
+- Omit JSDoc type annotations (TypeScript provides them)
+- Write comments that explain "why", not "what"
+
+## Deno Conventions
+
+### Style & Formatting
+- Run `deno fmt` before committing - enforces consistent style
+- Run `deno lint` to catch common issues
+- Run `deno check` for type checking without running
+
+### Best Practices
+- Use Deno standard library (`@std/`) over npm packages when available
+- Use explicit file extensions in imports (`.ts`)
+- Prefer `Deno.serve()` for HTTP servers
+- Use `Deno.env.get()` for environment variables
+- Avoid `node:` prefixed imports unless necessary
+
+### Testing
+- Use Deno's built-in test runner: `deno test`
+- Name test files with `.test.ts` suffix
+- Use `describe`/`it` pattern from `@std/testing/bdd`
+- Run with `--allow-*` flags explicitly, not `--allow-all`
+
+### Permissions
+- Follow principle of least privilege
+- Document required permissions in comments
+- Use `--deny-*` flags in production to restrict access
+
+## Python Conventions (PEP 8 + Modern Best Practices)
+
+### Style & Formatting
+- Run `ruff check` for linting (replaces flake8, isort, etc.)
+- Run `ruff format` for formatting (replaces black)
+- Maximum line length: 88 characters (black default)
+- Use 4-space indentation
+
+### Type Hints
+- Type hints for ALL function signatures (parameters and return)
+- Use `from __future__ import annotations` for forward references
+- Use `|` union syntax (Python 3.10+): `str | None` not `Optional[str]`
+- Use lowercase generics: `list[str]` not `List[str]`
+
+### Naming
+- `snake_case`: functions, variables, methods, modules
+- `PascalCase`: classes, type aliases
+- `SCREAMING_SNAKE_CASE`: constants
+- Prefix private methods/attributes with `_`
+
+### Code Style
+- Use f-strings for string formatting
+- Prefer `pathlib.Path` over `os.path`
+- Use context managers (`with`) for resource handling
+- Use dataclasses or Pydantic models for data structures
+- Prefer list/dict/set comprehensions over `map`/`filter`
+- Use `enumerate()` instead of manual index tracking
+
+### Documentation
+- Docstrings for all public modules, classes, and functions
+- Use Google-style docstrings:
+  ```python
+  def function(arg: str) -> bool:
+      """Short description.
+
+      Longer description if needed.
+
+      Args:
+          arg: Description of argument.
+
+      Returns:
+          Description of return value.
+
+      Raises:
+          ValueError: When arg is invalid.
+      """
+  ```
+
+### Testing
+- Use pytest with fixtures
+- Name test files `test_*.py` or `*_test.py`
+- Use descriptive test names: `test_should_return_error_when_invalid`
+- Aim for test isolation - each test independent
 
 ## File Organization
 ```
 backend/src/
 ├── db/           # Database schema and connection
+├── lib/          # Shared utilities
 ├── middleware/   # Auth and other middleware
 ├── routes/       # API route handlers
 └── tests/        # Test files
@@ -62,6 +154,11 @@ python-service/app/
 ├── extractors/   # Bank-specific extractors
 ├── schemas.py    # Pydantic models
 └── main.py       # FastAPI app
+
+scripts/
+├── migrations/   # Database migrations (numbered sequentially)
+├── init.sql      # Initial schema (DO NOT EDIT for deployed apps)
+└── run-migrations.sh
 ```
 
 ## Database Conventions
@@ -85,11 +182,51 @@ python-service/app/
 - User data isolated by user_id in all queries
 
 ## Before Committing
-1. Run `deno check src/main.ts` in backend
-2. Run `npm run build` in frontend (includes type checking)
-3. Run `pytest` in python-service
-4. Ensure no unused imports or variables
-5. Test the feature manually if UI changes
 
+### Backend (Deno)
+```bash
+cd backend
+deno fmt --check          # Check formatting
+deno fmt                  # Fix formatting
+deno lint                 # Lint code
+deno check src/main.ts    # Type check
+deno test                 # Run tests
+```
 
+### Frontend (React/TypeScript)
+```bash
+cd frontend
+npm run lint              # ESLint
+npx prettier --check .    # Check formatting
+npx prettier --write .    # Fix formatting
+npm run build             # Type check + build
+```
 
+### Python Service
+```bash
+cd python-service
+source venv/bin/activate
+ruff check .              # Lint
+ruff format --check .     # Check formatting
+ruff format .             # Fix formatting
+mypy app/                 # Type check (if configured)
+pytest                    # Run tests
+```
+
+### Quick All-in-One Check
+```bash
+# Backend
+cd backend && deno fmt && deno lint && deno check src/main.ts
+
+# Frontend  
+cd frontend && npm run lint && npx prettier --write . && npm run build
+
+# Python
+cd python-service && ruff check . && ruff format . && pytest
+```
+
+## References
+- [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)
+- [Deno Style Guide](https://docs.deno.com/runtime/fundamentals/testing/)
+- [PEP 8 - Python Style Guide](https://pep8.org/)
+- [Ruff - Python Linter](https://docs.astral.sh/ruff/)

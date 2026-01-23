@@ -7,6 +7,7 @@ import { loansRoutes } from "./routes/loans.ts";
 import { expensesRoutes } from "./routes/expenses.ts";
 import { categoriesRoutes } from "./routes/categories.ts";
 import { incomesRoutes } from "./routes/incomes.ts";
+import { savingsRoutes } from "./routes/savings.ts";
 import { importRoutes } from "./routes/import.ts";
 import { exportRoutes } from "./routes/export.ts";
 import { dashboardRoutes } from "./routes/dashboard.ts";
@@ -39,6 +40,7 @@ app.route("/api/loans", loansRoutes);
 app.route("/api/expenses", expensesRoutes);
 app.route("/api/categories", categoriesRoutes);
 app.route("/api/incomes", incomesRoutes);
+app.route("/api/savings", savingsRoutes);
 app.route("/api/import", importRoutes);
 app.route("/api/export", exportRoutes);
 app.route("/api/dashboard", dashboardRoutes);
@@ -49,5 +51,3 @@ const port = parseInt(Deno.env.get("PORT") || "8000");
 console.log(`🚀 Budget API running on http://localhost:${port}`);
 
 Deno.serve({ port }, app.fetch);
-
-

@@ -1,12 +1,5 @@
 import { Hono } from "hono";
-import {
-  assets,
-  categories,
-  db,
-  expenses,
-  incomes,
-  loans,
-} from "../db/index.ts";
+import { assets, categories, db, expenses, incomes, loans } from "../db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth.ts";
 
@@ -24,26 +17,25 @@ exportRoutes.get("/all", async (c) => {
   const user = c.get("user");
   const format = c.req.query("format") || "json";
 
-  const [userExpenses, userAssets, userLoans, userIncomes, userCategories] =
-    await Promise.all([
-      db.query.expenses.findMany({
-        where: eq(expenses.userId, user.id),
-        with: { category: true },
-        orderBy: (expenses, { desc }) => [desc(expenses.date)],
-      }),
-      db.query.assets.findMany({
-        where: eq(assets.userId, user.id),
-      }),
-      db.query.loans.findMany({
-        where: eq(loans.userId, user.id),
-      }),
-      db.query.incomes.findMany({
-        where: eq(incomes.userId, user.id),
-      }),
-      db.query.categories.findMany({
-        where: eq(categories.userId, user.id),
-      }),
-    ]);
+  const [userExpenses, userAssets, userLoans, userIncomes, userCategories] = await Promise.all([
+    db.query.expenses.findMany({
+      where: eq(expenses.userId, user.id),
+      with: { category: true },
+      orderBy: (expenses, { desc }) => [desc(expenses.date)],
+    }),
+    db.query.assets.findMany({
+      where: eq(assets.userId, user.id),
+    }),
+    db.query.loans.findMany({
+      where: eq(loans.userId, user.id),
+    }),
+    db.query.incomes.findMany({
+      where: eq(incomes.userId, user.id),
+    }),
+    db.query.categories.findMany({
+      where: eq(categories.userId, user.id),
+    }),
+  ]);
 
   // Convert from minor units to major units for human-readable export
   const data = {
@@ -148,9 +140,7 @@ exportRoutes.get("/expenses", async (c) => {
     return new Response(JSON.stringify(data, null, 2), {
       headers: {
         "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="expenses-${
-          yearMonth || "all"
-        }.json"`,
+        "Content-Disposition": `attachment; filename="expenses-${yearMonth || "all"}.json"`,
       },
     });
   }
@@ -178,9 +168,7 @@ exportRoutes.get("/expenses", async (c) => {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="expenses-${
-        yearMonth || "all"
-      }.csv"`,
+      "Content-Disposition": `attachment; filename="expenses-${yearMonth || "all"}.csv"`,
     },
   });
 });

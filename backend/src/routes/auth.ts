@@ -30,8 +30,8 @@ const cookieOptions = {
 authRoutes.post("/register", async (c) => {
   // Check if registration is allowed
   if (!allowRegistration) {
-    return c.json({ 
-      message: "Registration is disabled. Contact the administrator." 
+    return c.json({
+      message: "Registration is disabled. Contact the administrator.",
     }, 403);
   }
 

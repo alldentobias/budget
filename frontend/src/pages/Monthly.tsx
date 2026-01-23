@@ -9,10 +9,11 @@ import {
   ChevronRight,
   Edit2,
   Filter,
+  PiggyBank,
   Plus,
   Trash2,
 } from "lucide-react";
-import { categoriesApi, Expense, expensesApi, incomesApi } from "@/lib/api";
+import { categoriesApi, Expense, expensesApi, incomesApi, savingsApi } from "@/lib/api";
 import {
   formatCurrency,
   formatDate,
@@ -70,6 +71,7 @@ export function MonthlyPage() {
   );
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showIncomeDialog, setShowIncomeDialog] = useState(false);
+  const [showSavingDialog, setShowSavingDialog] = useState(false);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
@@ -95,6 +97,11 @@ export function MonthlyPage() {
   const { data: incomes = [] } = useQuery({
     queryKey: ["incomes", currentYearMonth],
     queryFn: () => incomesApi.getByMonth(currentYearMonth),
+  });
+
+  const { data: savings = [] } = useQuery({
+    queryKey: ["savings", currentYearMonth],
+    queryFn: () => savingsApi.getByMonth(currentYearMonth),
   });
 
   const { data: categories = [] } = useQuery({
@@ -162,6 +169,27 @@ export function MonthlyPage() {
         queryKey: ["incomes", currentYearMonth],
       });
       toast({ title: "Income deleted" });
+    },
+  });
+
+  const createSavingMutation = useMutation({
+    mutationFn: savingsApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["savings", currentYearMonth],
+      });
+      setShowSavingDialog(false);
+      toast({ title: "Saving added" });
+    },
+  });
+
+  const deleteSavingMutation = useMutation({
+    mutationFn: savingsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["savings", currentYearMonth],
+      });
+      toast({ title: "Saving deleted" });
     },
   });
 
@@ -402,7 +430,8 @@ export function MonthlyPage() {
     }, 0);
 
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
-  const balance = totalIncome - totalExpenses;
+  const totalSavings = savings.reduce((sum, s) => sum + s.amount, 0);
+  const balance = totalIncome - totalExpenses - totalSavings;
 
   // Pie chart data (amounts in minor units)
   const pieData = stats?.byCategory.filter((c) => c.amount > 0).map((c) => ({
@@ -434,7 +463,7 @@ export function MonthlyPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Income</CardDescription>
@@ -452,6 +481,19 @@ export function MonthlyPage() {
           <CardContent>
             <div className="text-2xl font-bold text-rose-500">
               {formatCurrency(totalExpenses)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1">
+              <PiggyBank className="h-3 w-3 text-blue-500" />
+              Total Savings
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-500">
+              {formatCurrency(totalSavings)}
             </div>
           </CardContent>
         </Card>
@@ -869,6 +911,130 @@ export function MonthlyPage() {
                             className="h-8 w-8 opacity-0 group-hover:opacity-100"
                             onClick={() =>
                               deleteIncomeMutation.mutate(income.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+
+          {/* Savings Section */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Savings</CardTitle>
+              <Dialog
+                open={showSavingDialog}
+                onOpenChange={setShowSavingDialog}
+              >
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const form = e.target as HTMLFormElement;
+                      const formData = new FormData(form);
+                      // Convert from major units (user input) to minor units
+                      const amountMajor = parseFloat(
+                        formData.get("amount") as string,
+                      );
+                      createSavingMutation.mutate({
+                        yearMonth: currentYearMonth,
+                        amount: toMinorUnits(amountMajor),
+                        source: formData.get("source") as string,
+                        notes: formData.get("notes") as string || undefined,
+                      });
+                    }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>Add Saving</DialogTitle>
+                      <DialogDescription>
+                        Add a saving entry for this month
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="saving-source">Description</Label>
+                        <Input
+                          id="saving-source"
+                          name="source"
+                          placeholder="e.g., Emergency Fund"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="saving-amount">Amount (kr)</Label>
+                        <Input
+                          id="saving-amount"
+                          name="amount"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="saving-notes">Notes (optional)</Label>
+                        <Textarea
+                          id="saving-notes"
+                          name="notes"
+                          placeholder="Any notes..."
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="submit"
+                        disabled={createSavingMutation.isPending}
+                      >
+                        {createSavingMutation.isPending
+                          ? "Adding..."
+                          : "Add Saving"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {savings.length === 0
+                ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No savings recorded
+                  </p>
+                )
+                : (
+                  <div className="space-y-3">
+                    {savings.map((saving) => (
+                      <div
+                        key={saving.id}
+                        className="flex items-center justify-between group"
+                      >
+                        <div>
+                          <div className="font-medium">{saving.source}</div>
+                          {saving.notes && (
+                            <div className="text-xs text-muted-foreground">
+                              {saving.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-blue-500">
+                            {formatCurrency(saving.amount)}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                            onClick={() =>
+                              deleteSavingMutation.mutate(saving.id)}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>

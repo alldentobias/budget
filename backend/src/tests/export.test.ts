@@ -3,17 +3,14 @@
  * Run with: deno test --allow-env --allow-read
  */
 
-import {
-  assertEquals,
-  assertStringIncludes,
-} from "https://deno.land/std@0.210.0/assert/mod.ts";
+import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.210.0/assert/mod.ts";
 
 /**
  * Test CSV export formatting utilities
  */
 
 // Helper function to escape CSV fields (replicated from export.ts logic)
-function escapeCSVField(value: string): string {
+function _escapeCSVField(value: string): string {
   if (value.includes('"') || value.includes(",") || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;
   }
@@ -299,5 +296,3 @@ Deno.test("CSV Round-trip - Data integrity", () => {
   assertEquals(parseFloat(fields[2]), originalExpense.amount);
   assertEquals(fields[3], originalExpense.category);
 });
-
-

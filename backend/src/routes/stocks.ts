@@ -1,11 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.ts";
-import {
-  fetchQuote,
-  fetchQuotesWithRateLimit,
-  getBaseCurrency,
-} from "../lib/stock-cache.ts";
+import { fetchQuote, fetchQuotesWithRateLimit, getBaseCurrency } from "../lib/stock-cache.ts";
 
 const stocksRoutes = new Hono();
 stocksRoutes.use("*", authMiddleware);
@@ -83,5 +79,3 @@ stocksRoutes.post("/quotes", async (c) => {
 });
 
 export { stocksRoutes };
-
-

@@ -6,6 +6,7 @@ All amounts are tested in minor units (øre/cents):
   - 12.50 kr -> 1250
   - 100.00 kr -> 10000
 """
+
 import io
 from datetime import datetime
 
@@ -39,7 +40,7 @@ class TestHelperFunctions:
     def test_parse_norwegian_amount_nan(self):
         """Test parsing NaN returns 0"""
         assert parse_norwegian_amount(pd.NA) == 0
-        assert parse_norwegian_amount(float('nan')) == 0
+        assert parse_norwegian_amount(float("nan")) == 0
 
     def test_parse_date_iso_format(self):
         """Test parsing ISO date format"""
@@ -69,8 +70,20 @@ class TestDNBMastercard:
     def test_extract_basic_transactions(self):
         """Test extracting basic DNB transactions"""
         data = [
-            {"Dato": "2025-01-15", "Beløpet gjelder": "Coffee Shop", "Valuta": "NOK", "Inn": None, "Ut": 45.00},
-            {"Dato": "2025-01-16", "Beløpet gjelder": "Grocery Store", "Valuta": "NOK", "Inn": None, "Ut": 250.50},
+            {
+                "Dato": "2025-01-15",
+                "Beløpet gjelder": "Coffee Shop",
+                "Valuta": "NOK",
+                "Inn": None,
+                "Ut": 45.00,
+            },
+            {
+                "Dato": "2025-01-16",
+                "Beløpet gjelder": "Grocery Store",
+                "Valuta": "NOK",
+                "Inn": None,
+                "Ut": 250.50,
+            },
         ]
         file_content = self.create_sample_excel(data)
 
@@ -113,7 +126,7 @@ class TestAmexNorway:
     def create_sample_excel_with_header(self, data: list[dict]) -> bytes:
         """Create Excel file with header at row 6 (0-indexed)"""
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             # Write empty rows first
             pd.DataFrame([[""] * 3] * 6).to_excel(writer, index=False, header=False)
             # Then write data starting at row 6
@@ -125,8 +138,32 @@ class TestAmexNorway:
     def test_extract_basic_transactions(self):
         """Test extracting basic Amex transactions"""
         data = [
-            {"Dato": "2025-01-15", "Beskrivelse": "Restaurant ABC", "Kortmedlem": "John Doe", "Kontonummer": "1234", "Beløp": 450.00, "Utvidede detaljer": "N/A", "Opptrer på din kontoutskrift som": "Memes", "Adresse": "MemeStreet 1", "Postnummer": 1234, "Land": "Norge", "Referance": "ABC"},
-            {"Dato": "2025-01-16", "Beskrivelse": "Online Store", "Kortmedlem": "John Doe", "Kontonummer": "1234", "Beløp": 199.90, "Utvidede detaljer": "N/A", "Opptrer på din kontoutskrift som": "Memes", "Adresse": "MemeStreet 1", "Postnummer": 1234, "Land": "Norge", "Referance": "ABC"},
+            {
+                "Dato": "2025-01-15",
+                "Beskrivelse": "Restaurant ABC",
+                "Kortmedlem": "John Doe",
+                "Kontonummer": "1234",
+                "Beløp": 450.00,
+                "Utvidede detaljer": "N/A",
+                "Opptrer på din kontoutskrift som": "Memes",
+                "Adresse": "MemeStreet 1",
+                "Postnummer": 1234,
+                "Land": "Norge",
+                "Referance": "ABC",
+            },
+            {
+                "Dato": "2025-01-16",
+                "Beskrivelse": "Online Store",
+                "Kortmedlem": "John Doe",
+                "Kontonummer": "1234",
+                "Beløp": 199.90,
+                "Utvidede detaljer": "N/A",
+                "Opptrer på din kontoutskrift som": "Memes",
+                "Adresse": "MemeStreet 1",
+                "Postnummer": 1234,
+                "Land": "Norge",
+                "Referance": "ABC",
+            },
         ]
         file_content = self.create_sample_excel_with_header(data)
 
@@ -144,7 +181,7 @@ class TestAmexNorway:
 class TestSB1Credit:
     """Test Sparebank1 Credit Card extractor"""
 
-    def create_sample_csv(self, rows: list[list], encoding='utf-8') -> bytes:
+    def create_sample_csv(self, rows: list[list], encoding="utf-8") -> bytes:
         """Create a sample CSV with semicolon separator"""
         header = "Kjøpsdato;Posteringsdato;Beskrivelse;Beløp"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
@@ -187,7 +224,7 @@ class TestSB1Credit:
         rows = [
             ["2025-01-15", "2025-01-16", "Café Nørdik", "-89,00"],
         ]
-        file_content = self.create_sample_csv(rows, encoding='latin-1')
+        file_content = self.create_sample_csv(rows, encoding="latin-1")
 
         transactions = extract_sb1_credit(file_content, "transactions.csv")
 
@@ -203,7 +240,7 @@ class TestSB1Common:
         header = "Dato;Beskrivelse;Ut"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
         content = "\n".join(lines)
-        return content.encode('utf-8')
+        return content.encode("utf-8")
 
     def test_extract_basic_transactions(self):
         """Test extracting basic SB1 common account transactions"""
@@ -257,7 +294,7 @@ class TestSB1Debit:
         header = "Dato;Posteringsdato;Beskrivelse;Ut"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
         content = "\n".join(lines)
-        return content.encode('utf-8')
+        return content.encode("utf-8")
 
     def test_extract_basic_transactions(self):
         """Test extracting basic SB1 debit transactions"""
@@ -290,7 +327,7 @@ class TestExportCSVFormat:
         ]
         header = "Dato;PosteringsDato;Beskrivelse;Ut"
         lines = [header] + [";".join(str(x) for x in row) for row in rows]
-        content = "\n".join(lines).encode('utf-8')
+        content = "\n".join(lines).encode("utf-8")
 
         # Extract
         transactions = extract_sb1_debit(content, "debit.csv")
