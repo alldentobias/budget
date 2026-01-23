@@ -14,6 +14,7 @@ import { assetsApi, dashboardApi } from "@/lib/api";
 import {
   formatCurrency,
   formatPercent,
+  formatYearWeek,
   fromMinorUnits,
   getMonthName,
   getYearMonth,
@@ -139,12 +140,11 @@ export function DashboardPage() {
   // Prepare net worth history for chart (sorted by date, most recent last)
   // Values are in minor units, need to convert for Y-axis display
   const chartData = [...netWorthHistory]
-    .sort((a, b) => a.yearMonth - b.yearMonth)
-    .slice(-12) // Last 12 months
+    .sort((a, b) => a.yearWeek - b.yearWeek)
+    .slice(-24) // Last 24 weeks
     .map((snapshot) => {
-      const { year, month } = parseYearMonth(snapshot.yearMonth);
       return {
-        month: `${getMonthName(month).slice(0, 3)} ${year}`,
+        week: formatYearWeek(snapshot.yearWeek),
         netWorth: snapshot.netWorth,
         assets: snapshot.totalAssets,
         liabilities: snapshot.totalLiabilities,
@@ -432,7 +432,7 @@ export function DashboardPage() {
                     </linearGradient>
                   </defs>
                   <XAxis
-                    dataKey="month"
+                    dataKey="week"
                     tick={{
                       fill: "hsl(var(--muted-foreground))",
                       fontSize: 11,

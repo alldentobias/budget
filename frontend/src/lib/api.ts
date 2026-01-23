@@ -336,7 +336,7 @@ export interface DashboardSummary {
 export interface NetWorthSnapshot {
   id: string;
   userId: string;
-  yearMonth: number;
+  yearWeek: number;
   totalAssets: number;
   totalLiabilities: number;
   netWorth: number;

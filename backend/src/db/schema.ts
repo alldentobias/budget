@@ -146,7 +146,7 @@ export const netWorthSnapshots = pgTable("net_worth_snapshots", {
   userId: uuid("user_id").notNull().references(() => users.id, {
     onDelete: "cascade",
   }),
-  yearMonth: integer("year_month").notNull(),
+  yearWeek: integer("year_week").notNull(),
   totalAssets: bigint("total_assets", { mode: "number" }).notNull(),
   totalLiabilities: bigint("total_liabilities", { mode: "number" }).notNull(),
   netWorth: bigint("net_worth", { mode: "number" }).notNull(),

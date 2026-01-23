@@ -65,3 +65,17 @@ export function getMonthName(month: number): string {
   const date = new Date(2024, month - 1, 1);
   return date.toLocaleString("en-US", { month: "long" });
 }
+
+export function parseYearWeek(
+  yearWeek: number,
+): { year: number; week: number } {
+  return {
+    year: Math.floor(yearWeek / 100),
+    week: yearWeek % 100,
+  };
+}
+
+export function formatYearWeek(yearWeek: number): string {
+  const { year, week } = parseYearWeek(yearWeek);
+  return `W${week} ${year}`;
+}

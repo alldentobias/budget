@@ -11,6 +11,19 @@ function getCurrentYearMonth(): number {
   return now.getFullYear() * 100 + (now.getMonth() + 1);
 }
 
+function getCurrentYearWeek(): number {
+  const now = new Date();
+  // Calculate ISO week number
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+  const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+  // Use ISO year (can differ from calendar year at year boundaries)
+  const thursday = new Date(now);
+  thursday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + 3);
+  const isoYear = thursday.getFullYear();
+  return isoYear * 100 + weekNumber;
+}
+
 dashboardRoutes.get("/summary", async (c) => {
   const user = c.get("user");
   const yearMonthParam = c.req.query("yearMonth");
@@ -147,17 +160,17 @@ dashboardRoutes.get("/net-worth-history", async (c) => {
 
   const snapshots = await db.query.netWorthSnapshots.findMany({
     where: eq(netWorthSnapshots.userId, user.id),
-    orderBy: [desc(netWorthSnapshots.yearMonth)],
+    orderBy: [desc(netWorthSnapshots.yearWeek)],
   });
 
   // Values are already numbers (bigint mode: "number")
   return c.json(snapshots);
 });
 
-// Record a net worth snapshot for current month
+// Record a net worth snapshot for current week
 dashboardRoutes.post("/record-snapshot", async (c) => {
   const user = c.get("user");
-  const currentYearMonth = getCurrentYearMonth();
+  const currentYearWeek = getCurrentYearWeek();
 
   // Calculate current net worth
   const [userAssets, userLoans] = await Promise.all([
@@ -189,11 +202,11 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
 
   const netWorth = totalAssets - totalLiabilities;
 
-  // Check if a snapshot for this month already exists
+  // Check if a snapshot for this week already exists
   const existing = await db.query.netWorthSnapshots.findFirst({
     where: and(
       eq(netWorthSnapshots.userId, user.id),
-      eq(netWorthSnapshots.yearMonth, currentYearMonth),
+      eq(netWorthSnapshots.yearWeek, currentYearWeek),
     ),
   });
 
@@ -216,7 +229,7 @@ dashboardRoutes.post("/record-snapshot", async (c) => {
       .insert(netWorthSnapshots)
       .values({
         userId: user.id,
-        yearMonth: currentYearMonth,
+        yearWeek: currentYearWeek,
         totalAssets: totalAssets,
         totalLiabilities: totalLiabilities,
         netWorth: netWorth,
