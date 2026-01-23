@@ -128,6 +128,12 @@ dashboardRoutes.get("/summary", async (c) => {
     { name: string; color: string; amount: number }
   >();
 
+  // Non-shared expenses only (personal spending)
+  const nonSharedCategorySpending = new Map<
+    string,
+    { name: string; color: string; amount: number }
+  >();
+
   let sharedExpensesTotal = 0;
 
   for (const expense of monthlyExpenses) {
@@ -151,6 +157,12 @@ dashboardRoutes.get("/summary", async (c) => {
         { name: catName, color: catColor, amount: 0 };
       existingShared.amount += amount;
       sharedCategorySpending.set(catId, existingShared);
+    } else {
+      // Track non-shared expenses (personal only)
+      const existingNonShared = nonSharedCategorySpending.get(catId) ||
+        { name: catName, color: catColor, amount: 0 };
+      existingNonShared.amount += amount;
+      nonSharedCategorySpending.set(catId, existingNonShared);
     }
   }
 
@@ -159,6 +171,10 @@ dashboardRoutes.get("/summary", async (c) => {
     .slice(0, 5);
 
   const sharedCategories = Array.from(sharedCategorySpending.values())
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  const nonSharedCategories = Array.from(nonSharedCategorySpending.values())
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
@@ -172,6 +188,7 @@ dashboardRoutes.get("/summary", async (c) => {
     monthlySavings: savingsTotal,
     stockPortfolioValue,
     topCategories,
+    nonSharedCategories,
     sharedExpenses: sharedExpensesTotal,
     sharedCategories,
   });

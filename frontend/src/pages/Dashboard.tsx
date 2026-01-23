@@ -28,6 +28,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/use-toast";
@@ -47,6 +49,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const currentYearMonth = getYearMonth(); // Current month for comparison
   const [selectedYearMonth, setSelectedYearMonth] = useState(currentYearMonth);
+  const [hideSharedInCategories, setHideSharedInCategories] = useState(false);
   const { year, month } = parseYearMonth(selectedYearMonth);
 
   // Check if we're at the current month (to disable forward navigation)
@@ -152,7 +155,10 @@ export function DashboardPage() {
     });
 
   // Prepare pie chart data for top spending categories
-  const pieData = summary?.topCategories?.map((cat) => ({
+  const categorySource = hideSharedInCategories
+    ? summary?.nonSharedCategories
+    : summary?.topCategories;
+  const pieData = categorySource?.map((cat) => ({
     name: cat.name,
     value: cat.amount,
     color: cat.color,
@@ -324,8 +330,24 @@ export function DashboardPage() {
         {/* Top Categories - Pie Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Spending Categories</CardTitle>
-            <CardDescription>This month's expenses by category</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Top Spending Categories</CardTitle>
+                <CardDescription>
+                  {hideSharedInCategories ? "Personal expenses only" : "This month's expenses by category"}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="hide-shared"
+                  checked={hideSharedInCategories}
+                  onCheckedChange={(checked) => setHideSharedInCategories(!!checked)}
+                />
+                <Label htmlFor="hide-shared" className="text-sm text-muted-foreground cursor-pointer">
+                  Hide shared
+                </Label>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {pieData.length > 0

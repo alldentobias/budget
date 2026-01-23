@@ -331,6 +331,7 @@ export interface DashboardSummary {
   monthlySavings: number;
   stockPortfolioValue: number;
   topCategories: Array<{ name: string; amount: number; color: string }>;
+  nonSharedCategories: Array<{ name: string; amount: number; color: string }>;
   sharedExpenses: number;
   sharedCategories: Array<{ name: string; amount: number; color: string }>;
 }
