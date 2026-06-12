@@ -13,6 +13,10 @@ from datetime import datetime
 import pandas as pd
 import pytest
 
+from app.extractors.handelsbanken import (
+    extract_handelsbanken_account,
+    extract_handelsbanken_credit,
+)
 from app.extractors.norwegian_banks import (
     extract_amex_norway,
     extract_dnb_mastercard,
@@ -339,6 +343,188 @@ class TestExportCSVFormat:
         assert t.title == "Test Transaction"
         assert t.amount == 99999  # 999.99 kr -> 99999 øre
         assert t.source == "SB1 Debit"
+
+
+class TestHandelsbankenCredit:
+    """Test Handelsbanken Credit Card extractor"""
+
+    def create_sample_excel(self, data: list[dict]) -> bytes:
+        """Create a sample Excel file from dict data"""
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False)
+        buffer.seek(0)
+        return buffer.read()
+
+    def test_extract_basic_transactions(self):
+        """Test extracting basic Handelsbanken credit transactions"""
+        data = [
+            {
+                "Dato": "11.06.2026",
+                "Beskrivelse": "BOLT.EU/O/2606102152",
+                "Inn på konto": None,
+                "Ut fra konto": -30.00,
+                "Originalt beløp": -30,
+                "Valuta": "NOK",
+                "Kurs": "-",
+            },
+            {
+                "Dato": "10.06.2026",
+                "Beskrivelse": "EasyPark AS easypark.no",
+                "Inn på konto": None,
+                "Ut fra konto": -21.90,
+                "Originalt beløp": -21.90,
+                "Valuta": "NOK",
+                "Kurs": "-",
+            },
+        ]
+        file_content = self.create_sample_excel(data)
+
+        transactions = extract_handelsbanken_credit(file_content, "transaksjoner.xlsx")
+
+        assert len(transactions) == 2
+        # Sorted by date in the extractor's caller, but extract_* preserves file order
+        assert transactions[0].title == "BOLT.EU/O/2606102152"
+        assert transactions[0].amount == 3000  # 30.00 kr -> 3000 øre
+        assert transactions[0].source == "Handelsbanken Credit"
+        assert transactions[0].date == "2026-06-11"
+
+        assert transactions[1].title == "EasyPark AS easypark.no"
+        assert transactions[1].amount == 2190  # 21.90 kr -> 2190 øre
+
+    def test_filters_incoming_transactions(self):
+        """Test that incoming transactions (refunds) are filtered out"""
+        data = [
+            {
+                "Dato": "11.06.2026",
+                "Beskrivelse": "Purchase",
+                "Inn på konto": None,
+                "Ut fra konto": -100.00,
+            },
+            {
+                "Dato": "12.06.2026",
+                "Beskrivelse": "Refund",
+                "Inn på konto": 50.00,
+                "Ut fra konto": None,
+            },
+        ]
+        file_content = self.create_sample_excel(data)
+
+        transactions = extract_handelsbanken_credit(file_content, "transaksjoner.xlsx")
+
+        assert len(transactions) == 1
+        assert transactions[0].title == "Purchase"
+
+    def test_missing_column_raises_error(self):
+        """Test that missing required column raises ValueError"""
+        data = [{"Dato": "11.06.2026", "Wrong Column": "test", "Ut fra konto": -100}]
+        file_content = self.create_sample_excel(data)
+
+        with pytest.raises(ValueError, match="Missing required column"):
+            extract_handelsbanken_credit(file_content, "transaksjoner.xlsx")
+
+
+class TestHandelsbankenAccount:
+    """Test Handelsbanken Account extractor"""
+
+    def create_sample_excel(self, data: list[dict]) -> bytes:
+        """Create a sample Excel file from dict data"""
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False)
+        buffer.seek(0)
+        return buffer.read()
+
+    def test_extract_basic_transactions(self):
+        """Test extracting basic Handelsbanken account transactions"""
+        data = [
+            {
+                "Utført dato": "12.06.2026",
+                "Beskrivelse": "Dominos",
+                "Type": "Varekjøp",
+                "Beløp inn": None,
+                "Beløp ut": -462.00,
+                "Valuta": "NOK",
+                "Status": "Bokført",
+            },
+            {
+                "Utført dato": "11.06.2026",
+                "Beskrivelse": "Vipps*FLYTOGET AS",
+                "Type": "Varekjøp",
+                "Beløp inn": None,
+                "Beløp ut": -268.00,
+                "Valuta": "NOK",
+                "Status": "Bokført",
+            },
+        ]
+        file_content = self.create_sample_excel(data)
+
+        transactions = extract_handelsbanken_account(file_content, "Transaksjoner.xlsx")
+
+        assert len(transactions) == 2
+        assert transactions[0].title == "Dominos"
+        assert transactions[0].amount == 46200  # 462.00 kr -> 46200 øre
+        assert transactions[0].source == "Handelsbanken Account"
+        assert transactions[0].date == "2026-06-12"
+
+        assert transactions[1].title == "Vipps*FLYTOGET AS"
+        assert transactions[1].amount == 26800  # 268.00 kr -> 26800 øre
+
+    def test_filters_reserved_transactions(self):
+        """Test that pending ('Reservert') transactions are filtered out"""
+        data = [
+            {
+                "Utført dato": "12.06.2026",
+                "Beskrivelse": "Pending Purchase",
+                "Beløp inn": None,
+                "Beløp ut": -100.00,
+                "Status": "Reservert",
+            },
+            {
+                "Utført dato": "11.06.2026",
+                "Beskrivelse": "Booked Purchase",
+                "Beløp inn": None,
+                "Beløp ut": -200.00,
+                "Status": "Bokført",
+            },
+        ]
+        file_content = self.create_sample_excel(data)
+
+        transactions = extract_handelsbanken_account(file_content, "Transaksjoner.xlsx")
+
+        assert len(transactions) == 1
+        assert transactions[0].title == "Booked Purchase"
+
+    def test_filters_incoming_transactions(self):
+        """Test that incoming transactions (salary, refunds) are filtered out"""
+        data = [
+            {
+                "Utført dato": "12.06.2026",
+                "Beskrivelse": "Lønn",
+                "Beløp inn": 10549.10,
+                "Beløp ut": None,
+            },
+            {
+                "Utført dato": "12.06.2026",
+                "Beskrivelse": "Dominos",
+                "Beløp inn": None,
+                "Beløp ut": -462.00,
+            },
+        ]
+        file_content = self.create_sample_excel(data)
+
+        transactions = extract_handelsbanken_account(file_content, "Transaksjoner.xlsx")
+
+        assert len(transactions) == 1
+        assert transactions[0].title == "Dominos"
+
+    def test_missing_column_raises_error(self):
+        """Test that missing required column raises ValueError"""
+        data = [{"Utført dato": "12.06.2026", "Wrong Column": "test", "Beløp ut": -100}]
+        file_content = self.create_sample_excel(data)
+
+        with pytest.raises(ValueError, match="Missing required column"):
+            extract_handelsbanken_account(file_content, "Transaksjoner.xlsx")
 
 
 if __name__ == "__main__":

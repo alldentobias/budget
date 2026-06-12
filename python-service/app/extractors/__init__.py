@@ -64,3 +64,4 @@ def run_extractor(name: str, file_content: bytes, filename: str) -> list[Extract
 # Import all extractor modules to register them
 from app.extractors.generic_csv import *
 from app.extractors.norwegian_banks import *
+from app.extractors.handelsbanken import *
