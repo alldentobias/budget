@@ -19,6 +19,7 @@ from app.extractors.handelsbanken import (
 )
 from app.extractors.norwegian_banks import (
     extract_amex_norway,
+    extract_dnb_debit,
     extract_dnb_mastercard,
     extract_sb1_common,
     extract_sb1_credit,
@@ -525,6 +526,52 @@ class TestHandelsbankenAccount:
 
         with pytest.raises(ValueError, match="Missing required column"):
             extract_handelsbanken_account(file_content, "Transaksjoner.xlsx")
+
+
+class TestDNBDebit:
+    """Test DNB Debit Account extractor"""
+
+    def create_sample_excel(self, data: list[dict]) -> bytes:
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False)
+        buffer.seek(0)
+        return buffer.read()
+
+    def test_extract_filters_incoming_and_reserved(self):
+        """Outgoing booked rows kept; incoming and 'Reservert' rows dropped"""
+        data = [
+            {
+                "Dato": "2026-06-22",
+                "Forklaring": "AvtaleGiro  Reservert transaksjon",
+                "Ut fra konto": 1391,
+                "Inn på konto": None,
+            },
+            {
+                "Dato": "2026-06-11",
+                "Forklaring": "Salary",
+                "Ut fra konto": None,
+                "Inn på konto": 1000,
+            },
+            {
+                "Dato": "2026-05-21",
+                "Forklaring": "Gjensidige Forsikring",
+                "Ut fra konto": 1395.50,
+                "Inn på konto": None,
+            },
+        ]
+        transactions = extract_dnb_debit(self.create_sample_excel(data), "dnb.xlsx")
+
+        assert len(transactions) == 1
+        assert transactions[0].title == "Gjensidige Forsikring"
+        assert transactions[0].amount == 139550  # 1395.50 kr -> 139550 øre
+        assert transactions[0].source == "DNB Debit"
+        assert transactions[0].date == "2026-05-21"
+
+    def test_missing_column_raises_error(self):
+        data = [{"Dato": "2026-05-21", "Wrong Column": "x", "Ut fra konto": 100}]
+        with pytest.raises(ValueError, match="Missing required column"):
+            extract_dnb_debit(self.create_sample_excel(data), "dnb.xlsx")
 
 
 if __name__ == "__main__":

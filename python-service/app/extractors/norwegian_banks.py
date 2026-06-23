@@ -309,6 +309,42 @@ def extract_sb1_debit(file_content: bytes, filename: str) -> list[ExtractedTrans
 
 
 @register_extractor(
+    name="dnb_debit", description="DNB Debit Account (Excel)", formats=["xlsx", "xls"]
+)
+def extract_dnb_debit(file_content: bytes, filename: str) -> List[ExtractedTransaction]:
+    """
+    Extract transactions from DNB Debit Account Excel export.
+    Columns: Dato, Forklaring, Rentedato, Ut fra konto, Inn på konto
+    Only processes outgoing transactions (Ut fra konto > 0).
+    Skips pending ("Reservert transaksjon") rows to avoid duplicating the
+    eventual booked transaction.
+    """
+    df = pd.read_excel(io.BytesIO(file_content))
+
+    required_cols = ["Dato", "Forklaring", "Ut fra konto"]
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}. Found: {list(df.columns)}")
+    df = df[required_cols]
+
+    df = df[df["Ut fra konto"] > 0]
+    df = df[~df["Forklaring"].astype(str).str.contains("Reservert transaksjon", na=False)]
+
+    transactions = []
+    for _, row in df.iterrows():
+        transactions.append(
+            ExtractedTransaction(
+                date=parse_date(row["Dato"]),
+                title=str(row["Forklaring"]).strip(),
+                amount=parse_norwegian_amount(row["Ut fra konto"]),
+                source="DNB Debit",
+                raw_data=row.to_json(),
+            )
+        )
+    return transactions
+
+
+@register_extractor(
     name="DNB Common Account", description="DNB Common Account Export (CSV)", formats=["csv"]
 )
 def extract_dnb_common_account(file_content: bytes, filename: str) -> List[ExtractedTransaction]:
